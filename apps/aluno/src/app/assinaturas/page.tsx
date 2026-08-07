@@ -1,9 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { CreditCard, History, Loader2, ShieldCheck, TicketPercent, XCircle } from "lucide-react";
-import { BrandMark, Button, StatCard, cn } from "@foxtrot/ui";
+import { Button, StatCard, cn } from "@foxtrot/ui";
+import { StudentNavigation } from "../../components/StudentNavigation";
 import {
   FinancialHistory,
   Plan,
@@ -70,6 +70,7 @@ export default function SubscriptionsPage() {
   }
 
   async function cancel(id: string) {
+    if (!window.confirm("Cancelar esta assinatura pode alterar o acesso do aluno. Confirmar?")) return;
     setSaving(true);
     setStatus("");
     try {
@@ -85,12 +86,7 @@ export default function SubscriptionsPage() {
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
-      <header className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/90 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <Link href="/"><BrandMark /></Link>
-          <Link className="inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-800" href="/gamificacao"><ShieldCheck className="h-4 w-4" /> Minha conta</Link>
-        </div>
-      </header>
+      <StudentNavigation activeHref="/assinaturas" />
 
       <section className="border-b border-zinc-800">
         <div className="mx-auto grid max-w-7xl gap-4 px-4 py-6 lg:grid-cols-[1fr_2fr] lg:items-end">

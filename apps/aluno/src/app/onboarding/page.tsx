@@ -2,52 +2,89 @@
 
 import { FormEvent, useState } from "react";
 import { Target } from "lucide-react";
-import { BrandMark, Button } from "@foxtrot/ui";
+import { Button, Card, ErrorState, Field, Input, PageHeader } from "@foxtrot/ui";
+import { StudentNavigation } from "../../components/StudentNavigation";
 import { apiRequest } from "../../lib/api";
 
 export default function OnboardingPage() {
   const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    setStatus("Salvando perfil...");
+    const age = Number(form.get("age"));
+    const dailyNetStudyGoalMins = Number(form.get("dailyNetStudyGoalMins"));
+    const weeklyQuestionGoal = Number(form.get("weeklyQuestionGoal"));
+    setStatus("");
+    setError("");
+
+    if (!Number.isFinite(age) || age < 13) return setError("Informe uma idade valida.");
+    if (!form.get("studyExperience") || !form.get("careerGoal")) return setError("Informe experiencia de estudo e carreira objetivo.");
+    if (dailyNetStudyGoalMins < 1 || weeklyQuestionGoal < 1) return setError("Informe metas maiores que zero.");
+
+    setSaving(true);
     try {
       await apiRequest("/auth/onboarding", {
         method: "POST",
         body: JSON.stringify({
-          age: Number(form.get("age")),
+          age,
           studyExperience: form.get("studyExperience"),
           careerGoal: form.get("careerGoal"),
           platformGoals: ["aprovacao rapida", "revisao"],
-          dailyNetStudyGoalMins: Number(form.get("dailyNetStudyGoalMins")),
-          weeklyQuestionGoal: Number(form.get("weeklyQuestionGoal")),
+          dailyNetStudyGoalMins,
+          weeklyQuestionGoal,
           examDate: form.get("examDate") || undefined
         })
       });
       setStatus("Perfil salvo. Ranking e metas ajustados.");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Falha ao salvar onboarding.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao salvar onboarding.");
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 px-4 py-8">
-      <form onSubmit={submit} className="mx-auto max-w-3xl rounded-md border border-zinc-800 bg-zinc-950 p-6">
-        <BrandMark />
-        <h1 className="mt-8 font-display text-4xl font-black uppercase text-white">Perfil de combate</h1>
-        <p className="mt-2 text-sm text-zinc-400">Esses dados alimentam metas, ranking por concurso-alvo e recomendacoes.</p>
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <label className="text-sm text-zinc-300">Idade<input name="age" className="mt-2 h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-white" type="number" defaultValue="28" /></label>
-          <label className="text-sm text-zinc-300">Tempo de estudo<input name="studyExperience" className="mt-2 h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-white" defaultValue="1 a 2 anos" /></label>
-          <label className="text-sm text-zinc-300">Carreira objetivo<input name="careerGoal" className="mt-2 h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-white" defaultValue="Policial" /></label>
-          <label className="text-sm text-zinc-300">Horas liquidas por dia<input name="dailyNetStudyGoalMins" className="mt-2 h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-white" type="number" defaultValue="180" /></label>
-          <label className="text-sm text-zinc-300">Questoes por semana<input name="weeklyQuestionGoal" className="mt-2 h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-white" type="number" defaultValue="150" /></label>
-          <label className="text-sm text-zinc-300">Data da prova<input name="examDate" className="mt-2 h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-white" type="date" /></label>
-        </div>
-        <Button className="mt-6" type="submit"><Target className="h-4 w-4" /> Salvar perfil</Button>
-        <p className="mt-4 min-h-5 text-sm text-zinc-400">{status}</p>
-      </form>
+    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      <StudentNavigation activeHref="/" />
+      <PageHeader
+        eyebrow="Primeira configuracao"
+        title="Perfil de estudo"
+        description="Esses dados alimentam metas, ranking por concurso-alvo e recomendacoes conectadas a sua conta."
+      />
+      <div className="mx-auto max-w-3xl px-4 py-6">
+        {error && <ErrorState description={error} />}
+        {status && <p className="mb-4 rounded-md border border-emerald-900 bg-emerald-950/40 p-3 text-sm text-emerald-100">{status}</p>}
+        <Card>
+          <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
+            <Field label="Idade" htmlFor="age">
+              <Input id="age" name="age" min="13" type="number" required />
+            </Field>
+            <Field label="Tempo de estudo" htmlFor="studyExperience">
+              <Input id="studyExperience" name="studyExperience" required />
+            </Field>
+            <Field label="Carreira objetivo" htmlFor="careerGoal">
+              <Input id="careerGoal" name="careerGoal" required />
+            </Field>
+            <Field label="Minutos liquidos por dia" htmlFor="dailyNetStudyGoalMins">
+              <Input id="dailyNetStudyGoalMins" name="dailyNetStudyGoalMins" min="1" type="number" required />
+            </Field>
+            <Field label="Questoes por semana" htmlFor="weeklyQuestionGoal">
+              <Input id="weeklyQuestionGoal" name="weeklyQuestionGoal" min="1" type="number" required />
+            </Field>
+            <Field label="Data da prova" htmlFor="examDate" hint="Opcional.">
+              <Input id="examDate" name="examDate" type="date" />
+            </Field>
+            <div className="md:col-span-2">
+              <Button disabled={saving} type="submit">
+                <Target className="h-4 w-4" aria-hidden /> Salvar perfil
+              </Button>
+            </div>
+          </form>
+        </Card>
+      </div>
     </main>
   );
 }

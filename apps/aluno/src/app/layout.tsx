@@ -4,8 +4,18 @@ import { AppFrame, AuthSessionProvider } from "@foxtrot/ui";
 import { CookieConsent } from "../components/CookieConsent";
 
 export const metadata: Metadata = {
-  title: "Foxtrot Aluno",
-  description: "Portal do aluno Foxtrot Concursos"
+  applicationName: "Foxtrot Concursos",
+  title: {
+    default: "Foxtrot Concursos | Area do aluno",
+    template: "%s | Foxtrot Concursos"
+  },
+  description: "Portal do aluno Foxtrot Concursos para cursos, aulas, questoes, simulados, foco, planejamento e progresso.",
+  openGraph: {
+    title: "Foxtrot Concursos | Area do aluno",
+    description: "Estude com cursos, questoes, simulados, foco e acompanhamento de progresso.",
+    siteName: "Foxtrot Concursos",
+    type: "website"
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

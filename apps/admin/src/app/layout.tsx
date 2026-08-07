@@ -3,8 +3,16 @@ import type { Metadata } from "next";
 import { AppFrame, AuthSessionProvider } from "@foxtrot/ui";
 
 export const metadata: Metadata = {
-  title: "Foxtrot Admin",
-  description: "Painel administrativo Foxtrot Concursos"
+  applicationName: "Foxtrot Concursos",
+  title: {
+    default: "Foxtrot Admin | Foxtrot Concursos",
+    template: "%s | Foxtrot Admin"
+  },
+  description: "Painel administrativo Foxtrot Concursos para operacao, usuarios, conteudo, pagamentos, auditoria e moderacao.",
+  robots: {
+    index: false,
+    follow: false
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
