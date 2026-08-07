@@ -75,6 +75,13 @@ export type AttemptHistory = QuestionAttempt & {
   simulation?: { id: string; title: string } | null;
 };
 
+export type FavoriteQuestion = {
+  id: string;
+  questionId: string;
+  createdAt: string;
+  question: QuestionSummary;
+};
+
 export type SimulationListItem = {
   id: string;
   title: string;
@@ -131,6 +138,7 @@ export type QuestionSearch = {
   answered?: "correct" | "incorrect" | "unanswered" | "";
   favorite?: boolean;
   hasExplanation?: boolean;
+  take?: string;
 };
 
 export async function fetchQuestionFilters() {
@@ -163,6 +171,10 @@ export async function fetchPerformance() {
 
 export async function fetchHistory() {
   return apiRequest<AttemptHistory[]>("/questions/history");
+}
+
+export async function fetchFavorites() {
+  return apiRequest<FavoriteQuestion[]>("/questions/favorites");
 }
 
 export async function fetchReviewErrors() {
@@ -210,6 +222,45 @@ export function kindLabel(kind: QuestionKind) {
   if (kind === "DISCURSIVE") return "Discursiva";
   if (kind === "TRUE_FALSE") return "Certo/Errado";
   return "Multipla escolha";
+}
+
+export function attemptResultLabel(value?: boolean | null) {
+  if (value === true) return "Correta";
+  if (value === false) return "Errada";
+  return "Pendente";
+}
+
+export function summarizeAttempts(history: AttemptHistory[]) {
+  const attempts = history.length;
+  const correct = history.filter((item) => item.isCorrect === true).length;
+  const incorrect = history.filter((item) => item.isCorrect === false).length;
+  const pending = history.filter((item) => item.isCorrect === null).length;
+  const objectiveAttempts = attempts - pending;
+  return {
+    attempts,
+    correct,
+    incorrect,
+    pending,
+    accuracy: objectiveAttempts > 0 ? Math.round((correct / objectiveAttempts) * 100) : 0
+  };
+}
+
+export function summarizeSimulation(simulation: Pick<SimulationListItem, "questionCount" | "attempts">) {
+  const answered = simulation.attempts.length;
+  const correct = simulation.attempts.filter((attempt) => attempt.isCorrect === true).length;
+  const pending = simulation.attempts.filter((attempt) => attempt.isCorrect === null).length;
+  const objectiveAnswered = answered - pending;
+  return {
+    answered,
+    correct,
+    pending,
+    accuracy: objectiveAnswered > 0 ? Math.round((correct / objectiveAnswered) * 100) : 0,
+    progressPercent: simulation.questionCount > 0 ? Math.round((answered / simulation.questionCount) * 100) : 0
+  };
+}
+
+export function shouldShowQuestionSolution(question: Pick<QuestionSummary, "attempts" | "explanation">) {
+  return Boolean(question.explanation || question.attempts?.length);
 }
 
 function toParams(filters: QuestionSearch) {

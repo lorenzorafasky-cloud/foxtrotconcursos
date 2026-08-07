@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import type { ReactNode } from "react";
 import {
   AlertCircle,
   BarChart3,
@@ -20,9 +20,11 @@ import {
   Target,
   XCircle
 } from "lucide-react";
-import { BrandMark, Button, StatCard, cn } from "@foxtrot/ui";
+import { Button, EmptyState as UiEmptyState, LoadingState, StatCard, cn } from "@foxtrot/ui";
+import { StudentNavigation } from "../../components/StudentNavigation";
 import {
   AttemptHistory,
+  FavoriteQuestion,
   PerformanceSubject,
   QuestionDetail,
   QuestionFilters,
@@ -31,8 +33,10 @@ import {
   SimulationDetail,
   SimulationListItem,
   SimulationResults,
+  attemptResultLabel,
   answerSimulationQuestion,
   createSimulation,
+  fetchFavorites,
   fetchHistory,
   fetchPerformance,
   fetchQuestionDetail,
@@ -44,11 +48,14 @@ import {
   kindLabel,
   parseAlternatives,
   setQuestionFavorite,
+  shouldShowQuestionSolution,
+  summarizeAttempts,
+  summarizeSimulation,
   submitQuestionAttempt,
   submitSimulation
 } from "../../lib/questions";
 
-type Tab = "banco" | "simulados" | "revisao";
+type Tab = "banco" | "simulados" | "revisao" | "favoritos";
 
 const emptyFilters: QuestionSearch = {
   q: "",
@@ -65,7 +72,8 @@ const emptyFilters: QuestionSearch = {
   kind: "",
   answered: "",
   favorite: false,
-  hasExplanation: false
+  hasExplanation: false,
+  take: "50"
 };
 
 export default function QuestionsPage() {
@@ -79,6 +87,7 @@ export default function QuestionsPage() {
   const [startedAt, setStartedAt] = useState(Date.now());
   const [performance, setPerformance] = useState<PerformanceSubject[]>([]);
   const [history, setHistory] = useState<AttemptHistory[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteQuestion[]>([]);
   const [reviewErrors, setReviewErrors] = useState<AttemptHistory[]>([]);
   const [simulations, setSimulations] = useState<SimulationListItem[]>([]);
   const [activeSimulation, setActiveSimulation] = useState<SimulationDetail | null>(null);
@@ -101,26 +110,19 @@ export default function QuestionsPage() {
   );
 
   const totals = useMemo(() => {
-    const attempts = history.length;
-    const correct = history.filter((item) => item.isCorrect === true).length;
-    const pending = history.filter((item) => item.isCorrect === null).length;
-    return {
-      attempts,
-      correct,
-      pending,
-      accuracy: attempts - pending > 0 ? Math.round((correct / (attempts - pending)) * 100) : 0
-    };
+    return summarizeAttempts(history);
   }, [history]);
 
   async function load() {
     setLoading(true);
     setError("");
     try {
-      const [loadedFilters, loadedQuestions, loadedPerformance, loadedHistory, loadedReview, loadedSimulations] = await Promise.all([
+      const [loadedFilters, loadedQuestions, loadedPerformance, loadedHistory, loadedFavorites, loadedReview, loadedSimulations] = await Promise.all([
         fetchQuestionFilters(),
         fetchQuestions(filters),
         fetchPerformance(),
         fetchHistory(),
+        fetchFavorites(),
         fetchReviewErrors(),
         fetchSimulations()
       ]);
@@ -128,6 +130,7 @@ export default function QuestionsPage() {
       setQuestions(loadedQuestions);
       setPerformance(loadedPerformance);
       setHistory(loadedHistory);
+      setFavorites(loadedFavorites);
       setReviewErrors(loadedReview);
       setSimulations(loadedSimulations);
       if (loadedQuestions[0]) await selectQuestion(loadedQuestions[0].id);
@@ -155,14 +158,16 @@ export default function QuestionsPage() {
   }
 
   async function refreshStudentStats() {
-    const [loadedPerformance, loadedHistory, loadedReview, loadedSimulations] = await Promise.all([
+    const [loadedPerformance, loadedHistory, loadedFavorites, loadedReview, loadedSimulations] = await Promise.all([
       fetchPerformance(),
       fetchHistory(),
+      fetchFavorites(),
       fetchReviewErrors(),
       fetchSimulations()
     ]);
     setPerformance(loadedPerformance);
     setHistory(loadedHistory);
+    setFavorites(loadedFavorites);
     setReviewErrors(loadedReview);
     setSimulations(loadedSimulations);
   }
@@ -212,6 +217,7 @@ export default function QuestionsPage() {
         current.map((item) => (item.id === question.id ? { ...item, favorites: favorite ? [{ id: "local" }] : [] } : item))
       );
       if (activeQuestion?.id === question.id) setActiveQuestion({ ...activeQuestion, favorites: favorite ? [{ id: "local" }] : [] });
+      setFavorites(await fetchFavorites());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nao foi possivel atualizar favorito.");
     } finally {
@@ -292,26 +298,7 @@ export default function QuestionsPage() {
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
-      <nav className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <Link href="/"><BrandMark /></Link>
-          <div className="flex items-center gap-2">
-            {(["banco", "simulados", "revisao"] as const).map((item) => (
-              <button
-                key={item}
-                className={cn(
-                  "h-10 rounded-md px-3 text-sm font-semibold capitalize text-zinc-300 hover:bg-zinc-800",
-                  tab === item && "bg-zinc-800 text-white"
-                )}
-                type="button"
-                onClick={() => setTab(item)}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </div>
-      </nav>
+      <StudentNavigation activeHref="/questoes" />
 
       <section className="border-b border-zinc-800">
         <div className="mx-auto grid max-w-7xl gap-4 px-4 py-6 lg:grid-cols-[1fr_2fr] lg:items-end">
@@ -322,7 +309,7 @@ export default function QuestionsPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard icon={<Target className="h-4 w-4" />} label="Questoes resolvidas" value={String(totals.attempts)} />
             <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="Aproveitamento" value={`${totals.accuracy}%`} tone="zinc" />
-            <StatCard icon={<AlertCircle className="h-4 w-4" />} label="Pendentes" value={String(totals.pending)} tone="red" />
+            <StatCard icon={<AlertCircle className="h-4 w-4" />} label="Erradas" value={String(totals.incorrect)} tone="red" />
             <StatCard icon={<BookOpenCheck className="h-4 w-4" />} label="Simulados" value={String(simulations.length)} />
           </div>
         </div>
@@ -331,10 +318,25 @@ export default function QuestionsPage() {
       <div className="mx-auto max-w-7xl px-4 py-6">
         {error && <Status tone="error" message={error} />}
         {success && <Status tone="success" message={success} />}
+        <div className="mb-5 flex gap-2 overflow-x-auto rounded-md border border-zinc-800 bg-zinc-950 p-1 foxtrot-scrollbar" role="tablist">
+          {(["banco", "simulados", "revisao", "favoritos"] as const).map((item) => (
+            <button
+              aria-selected={tab === item}
+              className={cn(
+                "h-9 shrink-0 rounded px-3 text-sm font-semibold capitalize text-zinc-300 hover:bg-zinc-800",
+                tab === item && "bg-foxtrot-500 text-white"
+              )}
+              key={item}
+              onClick={() => setTab(item)}
+              role="tab"
+              type="button"
+            >
+              {item}
+            </button>
+          ))}
+        </div>
         {loading ? (
-          <div className="flex min-h-[360px] items-center justify-center text-zinc-400">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Carregando questoes
-          </div>
+          <LoadingState label="Carregando questoes..." />
         ) : (
           <>
             {tab === "banco" && (
@@ -394,6 +396,16 @@ export default function QuestionsPage() {
                 performance={performance}
                 history={history}
                 reviewErrors={reviewErrors}
+                onOpenQuestion={(id) => {
+                  setTab("banco");
+                  void selectQuestion(id);
+                }}
+              />
+            )}
+
+            {tab === "favoritos" && (
+              <FavoritesPanel
+                favorites={favorites}
                 onOpenQuestion={(id) => {
                   setTab("banco");
                   void selectQuestion(id);
@@ -463,6 +475,15 @@ function FilterPanel({
           </select>
           <select
             className="h-10 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+            value={filters.take ?? "50"}
+            onChange={(event) => onChange({ ...filters, take: event.target.value })}
+          >
+            <option value="25">25 por busca</option>
+            <option value="50">50 por busca</option>
+            <option value="100">100 por busca</option>
+          </select>
+          <select
+            className="h-10 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
             value={filters.answered ?? ""}
             onChange={(event) => onChange({ ...filters, answered: event.target.value as QuestionSearch["answered"] })}
           >
@@ -524,7 +545,7 @@ function QuestionList({
         <h2 className="font-display text-xl font-bold uppercase text-white">Resultados</h2>
         {loading && <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />}
       </div>
-      {questions.length === 0 && <EmptyState icon={<Search className="h-5 w-5" />} text="Nenhuma questao encontrada." />}
+      {questions.length === 0 && <CompactEmptyState icon={<Search className="h-5 w-5" />} text="Nenhuma questao encontrada." />}
       {questions.map((question) => (
         <article
           key={question.id}
@@ -572,7 +593,7 @@ function QuestionWorkspace({
   onSubmit: () => void;
   onFavorite: (question: QuestionSummary) => void;
 }) {
-  if (!question) return <EmptyState icon={<FileText className="h-5 w-5" />} text="Selecione uma questao." />;
+  if (!question) return <CompactEmptyState icon={<FileText className="h-5 w-5" />} text="Selecione uma questao." />;
   const alternatives = question.kind === "DISCURSIVE" ? [] : parseAlternatives(question.alternatives);
   const latestAttempt = question.attempts?.[0];
   return (
@@ -619,7 +640,7 @@ function QuestionWorkspace({
         </div>
       </article>
 
-      {(latestAttempt || question.explanation || question.answers.length > 0 || question.submissions?.length) && (
+      {(shouldShowQuestionSolution(question) || question.answers.length > 0 || question.submissions?.length) && (
         <section className="grid gap-4 md:grid-cols-2">
           <article className="rounded-md border border-zinc-800 bg-zinc-950 p-4">
             <h3 className="font-display text-lg font-bold uppercase text-white">Explicacao</h3>
@@ -646,9 +667,9 @@ function SimulationList({ simulations, activeId, onOpen }: { simulations: Simula
   return (
     <aside className="grid content-start gap-3">
       <h1 className="font-display text-2xl font-bold uppercase text-white">Simulados</h1>
-      {simulations.length === 0 && <EmptyState icon={<Target className="h-5 w-5" />} text="Nenhum simulado criado." />}
+      {simulations.length === 0 && <CompactEmptyState icon={<Target className="h-5 w-5" />} text="Nenhum simulado criado." />}
       {simulations.map((simulation) => {
-        const correct = simulation.attempts.filter((attempt) => attempt.isCorrect === true).length;
+        const summary = summarizeSimulation(simulation);
         return (
           <button
             key={simulation.id}
@@ -658,7 +679,10 @@ function SimulationList({ simulations, activeId, onOpen }: { simulations: Simula
           >
             <p className="text-xs uppercase text-zinc-500">{simulation.status === "SUBMITTED" ? "Finalizado" : "Em andamento"}</p>
             <h2 className="mt-1 font-semibold text-white">{simulation.title}</h2>
-            <p className="mt-2 text-sm text-zinc-400">{simulation.attempts.length}/{simulation.questionCount} respondidas / {correct} certas</p>
+            <p className="mt-2 text-sm text-zinc-400">{summary.answered}/{simulation.questionCount} respondidas / {summary.correct} certas / {summary.accuracy}%</p>
+            <span className="mt-3 block h-2 rounded bg-zinc-800">
+              <span className="block h-2 rounded bg-foxtrot-500" style={{ width: `${summary.progressPercent}%` }} />
+            </span>
           </button>
         );
       })}
@@ -683,7 +707,7 @@ function SimulationWorkspace({
   onAnswer: (item: SimulationDetail["questions"][number]) => void;
   onFinish: () => void;
 }) {
-  if (!simulation) return <EmptyState icon={<Target className="h-5 w-5" />} text="Abra ou crie um simulado." />;
+  if (!simulation) return <CompactEmptyState icon={<Target className="h-5 w-5" />} text="Abra ou crie um simulado." />;
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -765,7 +789,7 @@ function ReviewPanel({
     <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
       <section className="grid content-start gap-3">
         <h1 className="font-display text-2xl font-bold uppercase text-white">Desempenho por tema</h1>
-        {performance.length === 0 && <EmptyState icon={<BarChart3 className="h-5 w-5" />} text="Resolva questoes para gerar desempenho." />}
+        {performance.length === 0 && <CompactEmptyState icon={<BarChart3 className="h-5 w-5" />} text="Resolva questoes para gerar desempenho." />}
         {performance.map((subject) => (
           <article key={subject.subjectId} className="rounded-md border border-zinc-800 bg-zinc-950 p-4">
             <div className="flex items-center justify-between gap-3">
@@ -789,7 +813,7 @@ function ReviewPanel({
         <div>
           <h1 className="font-display text-2xl font-bold uppercase text-white">Revisao de erros</h1>
           <div className="mt-3 grid gap-3">
-            {reviewErrors.length === 0 && <EmptyState icon={<RotateCcw className="h-5 w-5" />} text="Nenhum erro registrado." />}
+            {reviewErrors.length === 0 && <CompactEmptyState icon={<RotateCcw className="h-5 w-5" />} text="Nenhum erro registrado." />}
             {reviewErrors.map((item) => (
               <button key={item.id} className="rounded-md border border-zinc-800 bg-zinc-950 p-4 text-left" type="button" onClick={() => onOpenQuestion(item.question.id)}>
                 <p className="text-xs uppercase text-zinc-500">{item.question.code} / {item.question.subject.name}</p>
@@ -814,6 +838,34 @@ function ReviewPanel({
   );
 }
 
+function FavoritesPanel({ favorites, onOpenQuestion }: { favorites: FavoriteQuestion[]; onOpenQuestion: (id: string) => void }) {
+  return (
+    <section className="grid gap-4">
+      <div>
+        <p className="text-xs font-semibold uppercase text-foxtrot-300">Favoritos</p>
+        <h1 className="mt-1 font-display text-2xl font-bold uppercase text-white">Questões salvas</h1>
+      </div>
+      {favorites.length === 0 && (
+        <UiEmptyState title="Nenhuma favorita" description="Use o coração no banco de questões para salvar itens importantes para revisão." />
+      )}
+      <div className="grid gap-3 md:grid-cols-2">
+        {favorites.map((favorite) => (
+          <button
+            className="rounded-md border border-zinc-800 bg-zinc-950 p-4 text-left hover:border-foxtrot-500"
+            key={favorite.id}
+            onClick={() => onOpenQuestion(favorite.question.id)}
+            type="button"
+          >
+            <p className="text-xs uppercase text-zinc-500">{favorite.question.code} / {favorite.question.board.name} / {favorite.question.year}</p>
+            <h2 className="mt-2 line-clamp-3 font-semibold text-white">{favorite.question.statement}</h2>
+            <p className="mt-2 text-sm text-zinc-400">{favorite.question.subject.name}{favorite.question.topic ? ` / ${favorite.question.topic.name}` : ""}</p>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Select({ label, value, items, onChange }: { label: string; value: string; items: Array<{ id: string; name: string }>; onChange: (value: string) => void }) {
   return (
     <label className="text-xs uppercase text-zinc-500">
@@ -826,7 +878,7 @@ function Select({ label, value, items, onChange }: { label: string; value: strin
   );
 }
 
-function TextInput({ label, value, icon, onChange }: { label: string; value: string; icon?: React.ReactNode; onChange: (value: string) => void }) {
+function TextInput({ label, value, icon, onChange }: { label: string; value: string; icon?: ReactNode; onChange: (value: string) => void }) {
   return (
     <label className="text-xs uppercase text-zinc-500">
       {label}
@@ -839,9 +891,10 @@ function TextInput({ label, value, icon, onChange }: { label: string; value: str
 }
 
 function ResultBadge({ value }: { value?: boolean | null }) {
-  if (value === true) return <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-2 py-1 text-xs font-semibold uppercase text-emerald-400"><CheckCircle2 className="h-3 w-3" /> Correta</span>;
-  if (value === false) return <span className="inline-flex items-center gap-1 rounded bg-red-500/10 px-2 py-1 text-xs font-semibold uppercase text-red-400"><XCircle className="h-3 w-3" /> Errada</span>;
-  return <span className="inline-flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-xs font-semibold uppercase text-zinc-300"><FileText className="h-3 w-3" /> Pendente</span>;
+  const label = attemptResultLabel(value);
+  if (value === true) return <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-2 py-1 text-xs font-semibold uppercase text-emerald-400"><CheckCircle2 className="h-3 w-3" /> {label}</span>;
+  if (value === false) return <span className="inline-flex items-center gap-1 rounded bg-red-500/10 px-2 py-1 text-xs font-semibold uppercase text-red-400"><XCircle className="h-3 w-3" /> {label}</span>;
+  return <span className="inline-flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-xs font-semibold uppercase text-zinc-300"><FileText className="h-3 w-3" /> {label}</span>;
 }
 
 function Status({ tone, message }: { tone: "error" | "success"; message: string }) {
@@ -852,7 +905,7 @@ function Status({ tone, message }: { tone: "error" | "success"; message: string 
   );
 }
 
-function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
+function CompactEmptyState({ icon, text }: { icon: ReactNode; text: string }) {
   return (
     <div className="rounded-md border border-zinc-800 bg-zinc-950 p-6 text-center text-sm text-zinc-500">
       <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-md bg-zinc-900 text-zinc-400">{icon}</div>
