@@ -1,110 +1,232 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { LogIn, RotateCw, ShieldCheck } from "lucide-react";
-import { BrandMark, Button } from "@foxtrot/ui";
+import { KeyRound, Loader2, LogIn, MailCheck, RotateCw, ShieldCheck } from "lucide-react";
+import { Badge, Button, Card, ErrorState, Field, Input, Tabs, useAuthSession } from "@foxtrot/ui";
+import { AuthShell } from "../../components/AuthShell";
 import { apiRequest } from "../../lib/api";
+import {
+  getProfileRedirectPath,
+  getSafeNextPath,
+  isEmptyErrors,
+  normalizeCode,
+  validateLoginForm,
+  type AuthFieldErrors,
+  type LoginResult
+} from "../../lib/auth";
+
+type ChallengeMode = "totp" | "backup";
 
 export default function LoginPage() {
+  const session = useAuthSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [backupCode, setBackupCode] = useState("");
+  const [challengeMode, setChallengeMode] = useState<ChallengeMode>("totp");
   const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
   const [needsEmail, setNeedsEmail] = useState(false);
-  const [status, setStatus] = useState("");
+  const [nextPath, setNextPath] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [success, setSuccess] = useState("");
+  const [errors, setErrors] = useState<AuthFieldErrors>({});
+
+  useEffect(() => {
+    setNextPath(getSafeNextPath(new URLSearchParams(window.location.search).get("next")));
+  }, []);
+
+  useEffect(() => {
+    if (session.status === "authenticated") {
+      window.location.assign(nextPath ?? getProfileRedirectPath(session.user));
+    }
+  }, [nextPath, session.status, session.user]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const validation = validateLoginForm({ email, password, needsTwoFactor, twoFactorCode: challengeMode === "totp" ? twoFactorCode : backupCode });
+    setErrors(validation);
+    setMessage("");
+    setSuccess("");
     setNeedsEmail(false);
-    setStatus("Autenticando...");
+    if (!isEmptyErrors(validation)) return;
+
+    setLoading(true);
     try {
-      const result = await apiRequest<{
-        requiresTwoFactor?: boolean;
-        emailVerificationRequired?: boolean;
-        message?: string;
-        user?: { nickname: string; roles: string[] };
-      }>("/auth/login", {
+      const result = await apiRequest<LoginResult>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password, twoFactorCode: twoFactorCode || undefined })
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          twoFactorCode: challengeMode === "totp" ? normalizeCode(twoFactorCode) || undefined : undefined,
+          backupCode: challengeMode === "backup" ? normalizeCode(backupCode) || undefined : undefined
+        })
       });
+
       if (result.emailVerificationRequired) {
         setNeedsEmail(true);
-        setStatus(result.message ?? "Confirme seu e-mail antes de entrar.");
+        setMessage(result.message ?? "Confirme seu e-mail antes de entrar.");
         return;
       }
+
       if (result.requiresTwoFactor) {
         setNeedsTwoFactor(true);
-        setStatus("Informe o codigo 2FA para concluir.");
+        setMessage("Informe seu codigo de autenticacao em dois fatores.");
         return;
       }
-      setStatus(`Bem-vindo, ${result.user?.nickname ?? "operador"}. Redirecionando...`);
-      window.location.href = "/";
+
+      setSuccess("Login confirmado. Redirecionando...");
+      await session.refresh();
+      window.location.assign(nextPath ?? getProfileRedirectPath(result.user));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Falha no login.");
+      setMessage(error instanceof Error ? error.message : "Falha no login.");
+    } finally {
+      setLoading(false);
     }
   }
 
   async function resendVerification() {
-    setStatus("Enviando novo link...");
+    const validation = validateLoginForm({ email, password: "Senha123" });
+    if (validation.email) {
+      setErrors({ email: validation.email });
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+    setSuccess("");
     try {
       const result = await apiRequest<{ message: string; devVerificationUrl?: string }>("/auth/email/resend", {
         method: "POST",
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: email.trim() })
       });
-      setStatus(result.devVerificationUrl ? `${result.message} Link local: ${result.devVerificationUrl}` : result.message);
+      setSuccess(result.message);
+      if (result.devVerificationUrl) setMessage(`Link local: ${result.devVerificationUrl}`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Falha ao reenviar confirmacao.");
+      setMessage(error instanceof Error ? error.message : "Falha ao reenviar confirmacao.");
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <main className="grid min-h-screen bg-zinc-950 lg:grid-cols-[1fr_480px]">
-      <section className="relative hidden overflow-hidden border-r border-zinc-800 lg:block">
-        <img
-          alt="Central de estudos"
-          className="absolute inset-0 h-full w-full object-cover opacity-20"
-          src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1600&auto=format&fit=crop"
-        />
-        <div className="relative flex h-full flex-col justify-between p-10">
-          <BrandMark />
-          <div>
-            <h1 className="font-display text-5xl font-black uppercase text-white">Entrar na operacao</h1>
-          <p className="mt-3 max-w-xl text-zinc-300">Acesse aulas, questoes, foco e ranking com sessao protegida por JWT, cookies seguros e 2FA.</p>
-          </div>
+    <AuthShell
+      eyebrow="Acesso seguro"
+      title="Entrar na plataforma"
+      description="Sessao com cookies seguros, renovacao por refresh token e desafio 2FA quando ativado na conta."
+      aside={
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Badge tone="brand">JWT</Badge>
+          <Badge tone="success">2FA</Badge>
+          <Badge tone="info">Perfis</Badge>
         </div>
-      </section>
-      <section className="flex items-center justify-center px-4 py-10">
-        <form onSubmit={submit} className="w-full max-w-sm rounded-md border border-zinc-800 bg-zinc-950 p-6">
-          <div className="mb-8 lg:hidden">
-            <BrandMark />
-          </div>
-          <h2 className="font-display text-3xl font-black uppercase text-white">Login</h2>
-          <label className="mt-6 block text-sm text-zinc-300">
-            E-mail
-            <input className="mt-2 h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-white outline-none focus:border-orange-500" value={email} onChange={(event) => setEmail(event.target.value)} type="email" />
-          </label>
-          <label className="mt-4 block text-sm text-zinc-300">
-            Senha
-            <input className="mt-2 h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-white outline-none focus:border-orange-500" value={password} onChange={(event) => setPassword(event.target.value)} type="password" />
-          </label>
-          <label className="mt-4 block text-sm text-zinc-300">
-            Codigo 2FA
-            <input className="mt-2 h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-white outline-none focus:border-orange-500 disabled:opacity-60" value={twoFactorCode} onChange={(event) => setTwoFactorCode(event.target.value)} inputMode="numeric" disabled={!needsTwoFactor} />
-          </label>
-          <Button className="mt-6 w-full" type="submit"><LogIn className="h-4 w-4" /> Entrar</Button>
-          <p className="mt-4 min-h-5 text-sm text-zinc-400">{status}</p>
-          {needsEmail && (
-            <button type="button" onClick={resendVerification} className="mt-2 inline-flex items-center gap-2 text-sm text-foxtrot-400">
-              <RotateCw className="h-4 w-4" /> Reenviar confirmacao
-            </button>
-          )}
-          <Link className="mt-4 block text-sm text-zinc-500" href="/recuperar-senha">Esqueci minha senha</Link>
-          <Link className="mt-4 inline-flex items-center gap-2 text-sm text-foxtrot-400" href="/cadastro">
-            <ShieldCheck className="h-4 w-4" /> Criar conta operacional
+      }
+      footer={
+        <>
+          Ainda nao tem conta?{" "}
+          <Link className="font-semibold text-foxtrot-300 hover:text-foxtrot-200" href="/cadastro">
+            Criar cadastro
           </Link>
+        </>
+      }
+    >
+      <Card className="p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-3xl font-black uppercase text-white">Login</h1>
+            <p className="mt-2 text-sm text-zinc-400">Use seu e-mail cadastrado para continuar.</p>
+          </div>
+          <ShieldCheck className="h-6 w-6 text-foxtrot-400" aria-hidden />
+        </div>
+
+        <form className="mt-6 grid gap-4" onSubmit={submit} noValidate>
+          <Field label="E-mail" htmlFor="email" error={errors.email}>
+            <Input
+              autoComplete="email"
+              id="email"
+              inputMode="email"
+              onChange={(event) => setEmail(event.target.value)}
+              required
+              type="email"
+              value={email}
+            />
+          </Field>
+          <Field label="Senha" htmlFor="password" error={errors.password}>
+            <Input
+              autoComplete="current-password"
+              id="password"
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              type="password"
+              value={password}
+            />
+          </Field>
+
+          {needsTwoFactor && (
+            <div className="grid gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 p-3">
+              <Tabs<ChallengeMode>
+                items={[
+                  { id: "totp", label: "Aplicativo" },
+                  { id: "backup", label: "Backup" }
+                ]}
+                onChange={setChallengeMode}
+                value={challengeMode}
+              />
+              {challengeMode === "totp" ? (
+                <Field label="Codigo 2FA" htmlFor="twoFactorCode" error={errors.twoFactorCode}>
+                  <Input
+                    autoComplete="one-time-code"
+                    id="twoFactorCode"
+                    inputMode="numeric"
+                    maxLength={8}
+                    onChange={(event) => setTwoFactorCode(event.target.value)}
+                    placeholder="000000"
+                    value={twoFactorCode}
+                  />
+                </Field>
+              ) : (
+                <Field label="Codigo de backup" htmlFor="backupCode" error={errors.twoFactorCode}>
+                  <Input
+                    autoComplete="one-time-code"
+                    id="backupCode"
+                    onChange={(event) => setBackupCode(event.target.value)}
+                    placeholder="ABCD1234"
+                    value={backupCode}
+                  />
+                </Field>
+              )}
+            </div>
+          )}
+
+          {message && <ErrorState title="Atencao" description={message} />}
+          {success && (
+            <div className="rounded-md border border-green-900 bg-green-950/40 p-4 text-sm text-green-100" role="status">
+              {success}
+            </div>
+          )}
+
+          <Button className="w-full" disabled={loading} type="submit">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+            {needsTwoFactor ? "Validar e entrar" : "Entrar"}
+          </Button>
         </form>
-      </section>
-    </main>
+
+        {needsEmail && (
+          <Button className="mt-3 w-full" disabled={loading} onClick={resendVerification} type="button" variant="outline">
+            <RotateCw className="h-4 w-4" /> Reenviar confirmacao
+          </Button>
+        )}
+
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm">
+          <Link className="inline-flex items-center gap-2 text-zinc-400 hover:text-foxtrot-300" href="/recuperar-senha">
+            <KeyRound className="h-4 w-4" /> Esqueci minha senha
+          </Link>
+          <Link className="inline-flex items-center gap-2 text-zinc-400 hover:text-foxtrot-300" href="/confirmar-email">
+            <MailCheck className="h-4 w-4" /> Confirmar e-mail
+          </Link>
+        </div>
+      </Card>
+    </AuthShell>
   );
 }

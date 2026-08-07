@@ -14,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR">
       <body className="min-h-screen bg-zinc-950 text-zinc-50 antialiased foxtrot-scrollbar">
-        <AuthSessionProvider apiBaseUrl={apiBaseUrl} allowedRoles={["ALUNO", "ALUNO_ILIMITADO", "ADMIN_MASTER"]}>
+        <AuthSessionProvider apiBaseUrl={apiBaseUrl} allowedRoles={["ALUNO", "ALUNO_CURSO_ESPECIFICO", "ALUNO_ILIMITADO", "ADMIN_MASTER"]}>
           <AppFrame>{children}</AppFrame>
           <CookieConsent />
         </AuthSessionProvider>

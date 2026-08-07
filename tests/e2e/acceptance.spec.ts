@@ -15,7 +15,11 @@ test.describe("aceite do aluno", () => {
 
   test("abre autenticacao, pagamento e documentos legais", async ({ page }) => {
     await assertPage(page, `${alunoUrl}/login`, "Login");
-    await assertPage(page, `${alunoUrl}/cadastro`, "Cadastro");
+    await assertPage(page, `${alunoUrl}/cadastro`, "Criar conta");
+    await assertPage(page, `${alunoUrl}/recuperar-senha`, "Recuperar senha");
+    await assertPage(page, `${alunoUrl}/redefinir-senha`, "Redefinir senha");
+    await assertPage(page, `${alunoUrl}/confirmar-email`, "Reenviar link");
+    await assertPage(page, `${alunoUrl}/dois-fatores`, "Dois fatores");
     await assertPage(page, `${alunoUrl}/assinaturas`, "Checkout");
     await assertPage(page, `${alunoUrl}/termos`, "Termos de uso");
     await assertPage(page, `${alunoUrl}/privacidade`, "Politica de privacidade");
