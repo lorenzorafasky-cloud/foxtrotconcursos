@@ -604,3 +604,79 @@ export const statusIcons = {
   loading: Loader2,
   next: ChevronRight
 };
+
+/**
+ * Patentes Foxtrot (Secao 11 do Prompt Mestre) — mesma tabela usada pela API
+ * em `apps/api/src/modules/focus/ranks.ts`. Mantida sincronizada manualmente
+ * porque `packages/ui` nao pode depender da API.
+ */
+export const rankTable = [
+  { name: "Recruta", min: 0 },
+  { name: "Soldado", min: 250 },
+  { name: "Cabo", min: 700 },
+  { name: "Sargento", min: 1500 },
+  { name: "Tenente", min: 3000 },
+  { name: "Capitao", min: 5500 },
+  { name: "Major", min: 9000 },
+  { name: "Coronel", min: 14000 }
+] as const;
+
+export type RankName = (typeof rankTable)[number]["name"];
+
+export function rankForXp(xp: number): { name: RankName; index: number; nextRank: { name: RankName; min: number } | null; progressPercent: number } {
+  let index = 0;
+  for (let i = 0; i < rankTable.length; i += 1) {
+    const candidate = rankTable[i];
+    if (candidate && xp >= candidate.min) index = i;
+  }
+  const current = rankTable[index] ?? rankTable[0];
+  const nextRank = rankTable[index + 1] ?? null;
+  const progressPercent = nextRank
+    ? Math.min(100, Math.round(((xp - current.min) / (nextRank.min - current.min)) * 100))
+    : 100;
+  return { name: current.name, index, nextRank, progressPercent };
+}
+
+/**
+ * Cracha de patente estilo "central de operacoes": divisas + nome em fonte
+ * display. Use `size="sm"` em listas de ranking e `size="md"` em dashboards.
+ */
+export function RankInsignia({
+  xp,
+  size = "md",
+  showProgress = false,
+  className
+}: {
+  xp: number;
+  size?: "sm" | "md";
+  showProgress?: boolean;
+  className?: string;
+}) {
+  const rank = rankForXp(xp);
+  const chevrons = Math.min(rank.index + 1, 4);
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-2 border border-foxtrot-700/60 bg-ink-900 uppercase tracking-wider text-foxtrot-300",
+        size === "sm" ? "rounded-sm px-2 py-0.5 text-[11px]" : "rounded-md px-3 py-1 text-sm",
+        className
+      )}
+      title={`Patente ${rank.name} — ${xp} XP`}
+    >
+      <span aria-hidden className="flex items-end gap-0.5">
+        {Array.from({ length: chevrons }).map((_, position) => (
+          <span
+            key={position}
+            className={cn("inline-block rotate-45 border-b-2 border-r-2 border-foxtrot-400", size === "sm" ? "h-1.5 w-1.5" : "h-2 w-2")}
+          />
+        ))}
+      </span>
+      <span className="font-display font-bold text-white">{rank.name}</span>
+      {showProgress && rank.nextRank ? (
+        <span className="normal-case tracking-normal text-ink-400">
+          {rank.progressPercent}% para {rank.nextRank.name}
+        </span>
+      ) : null}
+    </span>
+  );
+}

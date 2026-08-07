@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import * as Sentry from "@sentry/node";
 import { NestFactory } from "@nestjs/core";
+import { IoAdapter } from "@nestjs/platform-socket.io";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { ValidationPipe } from "@nestjs/common";
 import { AppModule } from "./app.module";
@@ -11,7 +12,7 @@ import { HttpErrorFilter } from "./core/http-exception.filter";
 import { SecureLogger } from "./core/secure-logger.service";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const appConfig = loadAppConfig();
 
   if (process.env.SENTRY_DSN) {
@@ -20,6 +21,7 @@ async function bootstrap() {
 
   const logger = app.get(SecureLogger);
   app.useGlobalFilters(new HttpErrorFilter(logger));
+  app.useWebSocketAdapter(new IoAdapter(app));
   app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
   app.use(cookieParser());
   app.enableCors({

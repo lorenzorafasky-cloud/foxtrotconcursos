@@ -23,8 +23,12 @@ export class GamificationController {
   }
 
   @Get("leaderboard")
-  leaderboard(@Query("period") period?: "daily" | "weekly" | "all") {
-    return this.gamification.leaderboard(period ?? "weekly");
+  leaderboard(
+    @CurrentUser() user: AuthUser,
+    @Query("period") period?: "daily" | "weekly" | "all",
+    @Query("scope") scope?: "global" | "contest"
+  ) {
+    return this.gamification.leaderboardForUser(user.id, period ?? "weekly", scope ?? "global");
   }
 
   @Get("achievements")
