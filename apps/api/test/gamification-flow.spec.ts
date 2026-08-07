@@ -239,11 +239,15 @@ function makePrismaMock({
       update: vi.fn(({ where, data }) => Promise.resolve({ id: where.id, ...data }))
     },
     user: {
-      findMany: vi.fn().mockResolvedValue(users)
+      findMany: vi.fn().mockResolvedValue(users),
+      findUnique: vi.fn().mockResolvedValue({ streakFreezes: 1 })
     },
     onboardingProfile: {
       findUnique: vi.fn().mockResolvedValue(targetExam ? { targetExam } : null),
       findMany: vi.fn().mockResolvedValue(contestProfiles)
+    },
+    streakFreezeUse: {
+      findMany: vi.fn().mockResolvedValue([])
     }
   };
 }

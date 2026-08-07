@@ -94,7 +94,7 @@ export class AiService {
   async studySupport(user: AuthLikeUser, body: { question: string; lessonId?: string; questionId?: string }) {
     const question = body.question.trim();
     if (question.length < 5) throw new BadRequestException("Descreva melhor sua duvida.");
-    const context = await this.contextFor(body.lessonId, body.questionId, user.id);
+    const context = await this.contextFor(body.lessonId, body.questionId, user.id, question);
     const completion = await this.completeAndLog(
       user.id,
       "study.support",
@@ -280,11 +280,21 @@ export class AiService {
     if ((usage._sum.costCents ?? 0) >= AI_DAILY_COST_LIMIT_CENTS) throw new ForbiddenException("Limite diario de IA atingido.");
   }
 
-  private async contextFor(lessonId: string | undefined, questionId: string | undefined, userId: string) {
+  private async contextFor(lessonId: string | undefined, questionId: string | undefined, userId: string, query?: string) {
     const parts: string[] = [];
     if (lessonId) {
       const lesson = await this.prisma.lesson.findUnique({ where: { id: lessonId }, include: { assets: true, subject: true, topic: true } });
-      if (lesson) parts.push(`Aula: ${lesson.title}\nMateria: ${lesson.subject.name}\nAssunto: ${lesson.topic?.name ?? "geral"}\n${transcriptFromAssets(lesson.assets) ?? lesson.description}`);
+      if (lesson) {
+        const header = `Aula: ${lesson.title}\nMateria: ${lesson.subject.name}\nAssunto: ${lesson.topic?.name ?? "geral"}`;
+        // RAG: recupera apenas os trechos da transcricao mais relevantes para a
+        // pergunta (pgvector); mantem o isolamento por aula por construcao.
+        const chunks = query ? await this.retrieveLessonChunks(lessonId, query) : [];
+        if (chunks.length) {
+          parts.push(`${header}\nTrechos relevantes da transcricao:\n${chunks.map((chunk, index) => `[${index + 1}] ${chunk}`).join("\n")}`);
+        } else {
+          parts.push(`${header}\n${transcriptFromAssets(lesson.assets) ?? lesson.description}`);
+        }
+      }
     }
     if (questionId) {
       const question = await this.prisma.question.findUnique({ where: { id: questionId }, include: { subject: true, topic: true } });
@@ -293,6 +303,40 @@ export class AiService {
     const notes = await this.prisma.note.findMany({ where: { userId }, orderBy: { updatedAt: "desc" }, take: 5 });
     if (notes.length) parts.push(`Notas recentes:\n${notes.map((note) => `${note.title}: ${note.body}`).join("\n")}`);
     return parts.join("\n\n").slice(0, AI_MAX_PROMPT_CHARS);
+  }
+
+  /**
+   * Busca vetorial nos chunks da aula (pgvector, distancia de cosseno).
+   * Retorna vazio quando nao ha chunks indexados ou credenciais de embedding —
+   * o chamador cai no fallback de transcricao completa.
+   */
+  private async retrieveLessonChunks(lessonId: string, query: string, limit = 6): Promise<string[]> {
+    try {
+      const embedding = await this.embedText(query);
+      if (!embedding) return [];
+      const vectorLiteral = `[${embedding.join(",")}]`;
+      const rows = await this.prisma.$queryRaw<Array<{ content: string }>>(
+        Prisma.sql`SELECT content FROM "LessonChunk" WHERE "lessonId" = ${lessonId} AND embedding IS NOT NULL ORDER BY embedding <=> ${vectorLiteral}::vector LIMIT ${limit}`
+      );
+      return rows.map((row) => row.content);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Embedding via Cloudflare Workers AI (bge-m3, 1024 dims) — mesmo modelo usado na indexacao pelo worker. */
+  private async embedText(text: string): Promise<number[] | null> {
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+    if (!accountId || !apiToken) return null;
+    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/baai/bge-m3`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ text: [text.slice(0, 2000)] })
+    });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { result?: { data?: number[][] } };
+    return payload.result?.data?.[0] ?? null;
   }
 
   private assertCanGenerate(user: AuthLikeUser) {

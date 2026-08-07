@@ -112,3 +112,57 @@ resource "cloudflare_ruleset" "cache_static" {
     }
   }]
 }
+
+# --- Bot Fight Mode (Secao 12 do Prompt Mestre) ---
+resource "cloudflare_bot_management" "fight_mode" {
+  zone_id    = var.zone_id
+  fight_mode = true
+}
+
+# --- WAF custom rules (defesa alem das managed rules) ---
+resource "cloudflare_ruleset" "custom_waf" {
+  zone_id     = var.zone_id
+  name        = "foxtrot-custom-waf"
+  description = "Regras customizadas: endurecimento das rotas de autenticacao e webhooks."
+  kind        = "zone"
+  phase       = "http_request_firewall_custom"
+
+  rules = [
+    {
+      action      = "block"
+      description = "Bloqueia POST de autenticacao sem User-Agent (automacao trivial)"
+      expression  = "(http.request.uri.path contains \"/auth/\" and http.request.method eq \"POST\" and len(http.user_agent) == 0)"
+    },
+    {
+      action      = "managed_challenge"
+      description = "Desafio gerenciado em tentativas de login/cadastro com score de bot baixo"
+      expression  = "(http.request.uri.path in {\"/auth/login\" \"/auth/register\"} and http.request.method eq \"POST\" and cf.bot_management.score lt 30)"
+    },
+    {
+      action      = "block"
+      description = "Webhook do Stream so aceita POST"
+      expression  = "(http.request.uri.path contains \"/media/webhooks/\" and http.request.method ne \"POST\")"
+    }
+  ]
+}
+
+# --- Cloudflare Access (Zero Trust) no painel admin ---
+resource "cloudflare_zero_trust_access_application" "admin" {
+  count            = length(var.access_allowed_emails) > 0 ? 1 : 0
+  zone_id          = var.zone_id
+  name             = "Foxtrot Admin"
+  domain           = "admin.${var.root_domain}"
+  type             = "self_hosted"
+  session_duration = "12h"
+}
+
+resource "cloudflare_zero_trust_access_policy" "admin_allow" {
+  count          = length(var.access_allowed_emails) > 0 ? 1 : 0
+  application_id = cloudflare_zero_trust_access_application.admin[0].id
+  zone_id        = var.zone_id
+  name           = "Equipe autorizada"
+  decision       = "allow"
+  include = [
+    for email in var.access_allowed_emails : { email = { email = email } }
+  ]
+}

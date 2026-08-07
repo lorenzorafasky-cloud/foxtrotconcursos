@@ -22,6 +22,22 @@ export const rankingQueue = new Queue("ranking", { connection });
 export const notificationQueue = new Queue("notifications", { connection });
 export const aiQueue = new Queue("ai", { connection });
 
+/**
+ * Agendamento dos jobs recorrentes (Secao 11: reset/snapshot diario e semanal).
+ * Sem isto os handlers existiam mas nunca disparavam.
+ */
+void (async () => {
+  try {
+    await rankingQueue.upsertJobScheduler("ranking-daily", { pattern: "5 0 * * *" }, { name: "snapshot", data: { period: "daily" } });
+    await rankingQueue.upsertJobScheduler("ranking-weekly", { pattern: "10 0 * * 1" }, { name: "snapshot", data: { period: "weekly" } });
+    await notificationQueue.upsertJobScheduler("challenges-expire", { pattern: "15 0 * * *" }, { name: "challenge-expired", data: {} });
+    await notificationQueue.upsertJobScheduler("streak-guard", { pattern: "30 0 * * *" }, { name: "streak-guard", data: {} });
+    await aiQueue.upsertJobScheduler("ai-pending-sweep", { pattern: "*/10 * * * *" }, { name: "process-pending", data: {} });
+  } catch (error) {
+    console.warn("Falha ao agendar jobs recorrentes:", error instanceof Error ? error.message : error);
+  }
+})();
+
 new Worker(
   "media",
   async (job) => {
@@ -91,7 +107,7 @@ new Worker(
   async (job) => {
     if (job.name === "create") {
       const data = job.data as { userId: string; type?: NotificationType; title: string; body: string; actionUrl?: string; metadata?: object };
-      await prisma.notification.create({
+      const notification = await prisma.notification.create({
         data: {
           userId: data.userId,
           type: data.type ?? NotificationType.SYSTEM,
@@ -101,12 +117,16 @@ new Worker(
           metadata: data.metadata
         }
       });
+      await sendNotificationEmail(notification.userId, data.title, data.body, data.actionUrl);
     }
     if (job.name === "challenge-expired") {
       await prisma.challenge.updateMany({
         where: { status: ChallengeStatus.ACTIVE, endsAt: { lt: new Date() } },
         data: { status: ChallengeStatus.FINISHED }
       });
+    }
+    if (job.name === "streak-guard") {
+      await runStreakGuard();
     }
   },
   { connection }
@@ -303,6 +323,11 @@ async function transcribeLesson(lessonId: string, videoUid: string) {
     });
   }
 
+  // Indexacao RAG: chunking + embeddings por aula (pgvector).
+  await indexLessonChunks(lessonId, text).catch((error) => {
+    console.warn(`Indexacao RAG falhou para aula ${lessonId}:`, error instanceof Error ? error.message : error);
+  });
+
   const ownerId = lesson.teacherId ?? (await firstAdminId());
   if (ownerId) {
     const summaryJob = await aiDb.aiAutomationJob.create({
@@ -314,6 +339,125 @@ async function transcribeLesson(lessonId: string, videoUid: string) {
       }
     });
     await aiQueue.add("process-job", { jobId: summaryJob.id });
+  }
+}
+
+/**
+ * Fatia a transcricao em chunks (~1200 chars com overlap) e grava embeddings
+ * (Workers AI bge-m3, 1024 dims — mesmo modelo consultado pela API no RAG).
+ */
+async function indexLessonChunks(lessonId: string, transcript: string) {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+  if (!accountId || !apiToken) return;
+
+  const chunks = chunkText(transcript, 1200, 200);
+  if (!chunks.length) return;
+
+  await prisma.lessonChunk.deleteMany({ where: { lessonId } });
+  for (let position = 0; position < chunks.length; position += 1) {
+    const content = chunks[position];
+    if (!content) continue;
+    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/baai/bge-m3`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ text: [content.slice(0, 2000)] })
+    });
+    if (!response.ok) throw new Error(`Embedding falhou no chunk ${position}.`);
+    const payload = (await response.json()) as { result?: { data?: number[][] } };
+    const embedding = payload.result?.data?.[0];
+    if (!embedding) throw new Error(`Embedding vazio no chunk ${position}.`);
+    await prisma.$executeRaw`
+      INSERT INTO "LessonChunk" ("id", "lessonId", "position", "content", "embedding")
+      VALUES (${`${lessonId}-${position}`}, ${lessonId}, ${position}, ${content}, ${`[${embedding.join(",")}]`}::vector)
+      ON CONFLICT ("lessonId", "position") DO UPDATE SET "content" = EXCLUDED."content", "embedding" = EXCLUDED."embedding"
+    `;
+  }
+}
+
+function chunkText(text: string, size: number, overlap: number) {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return [] as string[];
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < clean.length) {
+    chunks.push(clean.slice(start, start + size));
+    start += size - overlap;
+  }
+  return chunks;
+}
+
+/**
+ * Streak freeze (Secao 17): se o usuario nao estudou ontem mas vinha em
+ * ofensiva e tem congelamentos disponiveis, consome um e marca o dia como
+ * coberto, notificando o aluno.
+ */
+async function runStreakGuard() {
+  const yesterday = new Date();
+  yesterday.setHours(0, 0, 0, 0);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const dayBefore = new Date(yesterday);
+  dayBefore.setDate(dayBefore.getDate() - 1);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const candidates = await prisma.user.findMany({
+    where: { streakFreezes: { gt: 0 } },
+    select: { id: true, streakFreezes: true }
+  });
+
+  for (const user of candidates) {
+    const [activeYesterday, activeDayBefore, alreadyCovered] = await Promise.all([
+      hadActivity(user.id, yesterday, today),
+      hadActivity(user.id, dayBefore, yesterday),
+      prisma.streakFreezeUse.findUnique({ where: { userId_date: { userId: user.id, date: yesterday } } })
+    ]);
+    if (activeYesterday || !activeDayBefore || alreadyCovered) continue;
+
+    await prisma.$transaction([
+      prisma.streakFreezeUse.create({ data: { userId: user.id, date: yesterday } }),
+      prisma.user.update({ where: { id: user.id }, data: { streakFreezes: { decrement: 1 } } })
+    ]);
+    await prisma.notification.create({
+      data: {
+        userId: user.id,
+        type: NotificationType.SYSTEM,
+        title: "Ofensiva protegida",
+        body: "Voce nao estudou ontem, mas um congelamento de ofensiva foi usado automaticamente. Sua sequencia continua viva.",
+        actionUrl: "/gamificacao"
+      }
+    });
+  }
+}
+
+async function hadActivity(userId: string, from: Date, to: Date) {
+  const [focus, attempts] = await Promise.all([
+    prisma.focusSession.count({ where: { userId, startedAt: { gte: from, lt: to }, netSeconds: { gt: 0 } } }),
+    prisma.questionAttempt.count({ where: { userId, createdAt: { gte: from, lt: to } } })
+  ]);
+  return focus > 0 || attempts > 0;
+}
+
+/** E-mail transacional de notificacao via Resend (silencioso sem API key). */
+async function sendNotificationEmail(userId: string, title: string, body: string, actionUrl?: string) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, nickname: true } });
+  if (!user) return;
+  const appUrl = process.env.APP_URL ?? "http://localhost:3100";
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        from: process.env.MAIL_FROM ?? "Foxtrot Concursos <contato@foxtrotconcursos.com.br>",
+        to: user.email,
+        subject: `[Foxtrot] ${title}`,
+        text: `${body}${actionUrl ? `\n\nAcesse: ${appUrl}${actionUrl}` : ""}`
+      })
+    });
+  } catch (error) {
+    console.warn("Falha ao enviar e-mail de notificacao:", error instanceof Error ? error.message : error);
   }
 }
 

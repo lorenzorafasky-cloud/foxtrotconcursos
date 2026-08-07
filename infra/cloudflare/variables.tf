@@ -39,3 +39,9 @@ variable "professor_origin" {
   type        = string
   description = "Hostname do app professor."
 }
+
+variable "access_allowed_emails" {
+  type        = list(string)
+  default     = []
+  description = "E-mails autorizados no Cloudflare Access do painel admin (Zero Trust). Vazio desativa o Access."
+}

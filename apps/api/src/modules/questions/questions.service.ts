@@ -203,6 +203,27 @@ export class QuestionsService {
     return this.prisma.questionAnswer.create({ data: { userId, questionId, body, isOfficial } });
   }
 
+  /** Upvote com toggle: um voto por usuario por resposta (tabela QuestionAnswerVote). */
+  async upvoteAnswer(userId: string, answerId: string) {
+    const answer = await this.prisma.questionAnswer.findUnique({ where: { id: answerId } });
+    if (!answer) throw new NotFoundException("Resposta nao encontrada.");
+    const existing = await this.prisma.questionAnswerVote.findUnique({
+      where: { answerId_userId: { answerId, userId } }
+    });
+    if (existing) {
+      const [, updated] = await this.prisma.$transaction([
+        this.prisma.questionAnswerVote.delete({ where: { answerId_userId: { answerId, userId } } }),
+        this.prisma.questionAnswer.update({ where: { id: answerId }, data: { upvotes: { decrement: 1 } } })
+      ]);
+      return { voted: false, upvotes: Math.max(0, updated.upvotes) };
+    }
+    const [, updated] = await this.prisma.$transaction([
+      this.prisma.questionAnswerVote.create({ data: { answerId, userId } }),
+      this.prisma.questionAnswer.update({ where: { id: answerId }, data: { upvotes: { increment: 1 } } })
+    ]);
+    return { voted: true, upvotes: updated.upvotes };
+  }
+
   async aiAnswer(questionId: string) {
     const cached = await this.prisma.questionAiAnswer.findUnique({ where: { questionId } });
     if (cached) return cached;
@@ -287,6 +308,7 @@ export class QuestionsService {
           ? [{ title: { contains: filters.q, mode: "insensitive" } }, { body: { contains: filters.q, mode: "insensitive" } }]
           : undefined
       },
+      include: { question: { select: { code: true, statement: true } } },
       orderBy: { updatedAt: "desc" }
     });
   }
