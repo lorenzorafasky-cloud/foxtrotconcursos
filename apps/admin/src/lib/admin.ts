@@ -49,6 +49,7 @@ export type UserRow = {
   twoFactorEnabled: boolean;
   roles: Array<{ role: { name: RoleName } }>;
   permissions: Array<{ granted: boolean; permission: PermissionRow }>;
+  entitlements?: Array<{ id: string; course?: { id: string; title: string } | null; startsAt?: string; endsAt?: string | null }>;
 };
 
 export type CourseRow = {
@@ -152,8 +153,20 @@ export function createUser(body: { email: string; fullName: string; nickname: st
   return apiRequest<UserRow>("/admin/users", { method: "POST", body: JSON.stringify(body) });
 }
 
+export function updateUser(id: string, body: { fullName?: string; nickname?: string; emailVerified?: boolean; twoFactorEnabled?: boolean }) {
+  return apiRequest<UserRow>(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
 export function setUserRoles(id: string, roles: RoleName[]) {
   return apiRequest<UserRow>(`/admin/users/${id}/roles`, { method: "PATCH", body: JSON.stringify({ roles, confirm: true }) });
+}
+
+export function setUserPermission(id: string, key: string, granted: boolean) {
+  return apiRequest(`/admin/users/${id}/permissions/${encodeURIComponent(key)}`, { method: "PATCH", body: JSON.stringify({ granted }) });
+}
+
+export function listRoles() {
+  return apiRequest<RoleRow[]>("/admin/roles");
 }
 
 export function setRolePermissions(name: RoleName, permissionKeys: string[]) {
@@ -168,6 +181,10 @@ export function createCourse(body: { title: string; slug: string; description: s
   return apiRequest<CourseRow>("/admin/courses", { method: "POST", body: JSON.stringify(body) });
 }
 
+export function updateCourse(id: string, body: Partial<{ title: string; slug: string; description: string; status: CourseStatus; careerId: string; boardId?: string; area: string; coverImageUrl?: string; workloadMinutes?: number }>) {
+  return apiRequest<CourseRow>(`/admin/courses/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
 export function publishCourse(id: string) {
   return apiRequest<CourseRow>(`/admin/courses/${id}/publish`, { method: "PATCH", body: "{}" });
 }
@@ -178,6 +195,10 @@ export function listProfessors(params: URLSearchParams) {
 
 export function assignProfessorSubject(userId: string, subjectId: string) {
   return apiRequest(`/admin/professors/${userId}/subjects`, { method: "POST", body: JSON.stringify({ subjectId }) });
+}
+
+export function removeProfessorSubject(userId: string, subjectId: string) {
+  return apiRequest(`/admin/professors/${userId}/subjects/${subjectId}`, { method: "DELETE" });
 }
 
 export function listEnrollments(params: URLSearchParams) {
@@ -198,6 +219,34 @@ export function listQuestions(params: URLSearchParams) {
 
 export function importQuestion(body: { questions: unknown[] }) {
   return apiRequest("/admin/questions/import", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function updateQuestion(
+  id: string,
+  body: Partial<{
+    code: string;
+    kind: QuestionKind;
+    statement: string;
+    alternatives: unknown;
+    correctAnswer: string;
+    year: number;
+    board: string;
+    career: string;
+    subject: string;
+    topic: string;
+    institution: string;
+    position: string;
+    sourceExam: string;
+    explanation: string;
+    boardId: string;
+    careerId: string;
+    subjectId: string;
+    topicId: string;
+    institutionId: string;
+    positionId: string;
+  }>
+) {
+  return apiRequest<QuestionRow>(`/admin/questions/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 }
 
 export function listSimulations(params: URLSearchParams) {
@@ -254,4 +303,73 @@ export function listAudit(params: URLSearchParams) {
 
 export function slugFrom(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+export function money(cents: number, currency = "BRL") {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format((cents || 0) / 100);
+}
+
+export function buildPageParams(input: { page?: number; limit?: number; q?: string; filters?: Record<string, string> }) {
+  const params = new URLSearchParams();
+  params.set("page", String(input.page ?? 1));
+  params.set("limit", String(input.limit ?? 20));
+  if (input.q?.trim()) params.set("q", input.q.trim());
+  for (const [key, value] of Object.entries(input.filters ?? {})) {
+    if (value) params.set(key, value);
+  }
+  return params;
+}
+
+export function roleLabels(user: Pick<UserRow, "roles">) {
+  return user.roles.map((role) => role.role.name).join(", ") || "Sem perfil";
+}
+
+export function permissionKeysFromText(value: string) {
+  return [...new Set(value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean))];
+}
+
+export function summarizePayments(payments: AdminDashboard["payments"]) {
+  return payments.reduce(
+    (summary, payment) => {
+      summary.count += payment._count;
+      summary.amountCents += payment._sum.amountCents ?? 0;
+      summary.byStatus[payment.status] = payment._count;
+      return summary;
+    },
+    { count: 0, amountCents: 0, byStatus: {} as Partial<Record<PaymentStatus, number>> }
+  );
+}
+
+export function summarizeSimulation(simulation: Pick<SimulationRow, "attempts" | "questionCount">) {
+  const graded = simulation.attempts.filter((attempt) => attempt.isCorrect !== null && attempt.isCorrect !== undefined);
+  const correct = graded.filter((attempt) => attempt.isCorrect).length;
+  return {
+    answered: simulation.attempts.length,
+    correct,
+    accuracy: graded.length ? Math.round((correct / graded.length) * 100) : 0,
+    progressPercent: simulation.questionCount ? Math.round((simulation.attempts.length / simulation.questionCount) * 100) : 0
+  };
+}
+
+export function validateUserForm(form: { email: string; fullName: string; nickname: string; password: string }) {
+  const errors: Record<string, string> = {};
+  if (!form.email.includes("@")) errors.email = "Informe um e-mail valido.";
+  if (!form.fullName.trim()) errors.fullName = "Informe o nome.";
+  if (!form.nickname.trim()) errors.nickname = "Informe o apelido.";
+  if (form.password.length < 8) errors.password = "A senha temporaria deve ter pelo menos 8 caracteres.";
+  return errors;
+}
+
+export function validateCourseForm(form: { title: string; slug: string; description: string; careerId: string; area: string }) {
+  const errors: Record<string, string> = {};
+  if (!form.title.trim()) errors.title = "Informe o titulo.";
+  if (!slugFrom(form.slug)) errors.slug = "Informe um slug valido.";
+  if (!form.description.trim()) errors.description = "Informe a descricao.";
+  if (!form.careerId) errors.careerId = "Escolha a carreira.";
+  if (!form.area.trim()) errors.area = "Informe a area.";
+  return errors;
+}
+
+export function parseJsonOrThrow(value: string) {
+  return JSON.parse(value) as unknown;
 }
