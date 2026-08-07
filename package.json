@@ -21,6 +21,7 @@
     "db:migrate": "pnpm --filter @foxtrot/database db:migrate",
     "db:seed": "pnpm --filter @foxtrot/database db:seed",
     "openapi:export": "pnpm --filter @foxtrot/api openapi:export",
+    "prod:check": "node scripts/production-readiness.mjs",
     "format": "prettier --write .",
     "e2e": "playwright test"
   },

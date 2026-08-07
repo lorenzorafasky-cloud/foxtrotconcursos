@@ -1,9 +1,11 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { JwtService } from "@nestjs/jwt";
 import { Request } from "express";
+import { AuthUser } from "./auth-user.decorator";
 import { IS_PUBLIC_KEY } from "./public.decorator";
 import { PERMISSIONS_KEY } from "./permissions.decorator";
+import { ROLES_KEY } from "./roles.decorator";
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -23,20 +25,29 @@ export class JwtAuthGuard implements CanActivate {
     const token = this.extractToken(request);
     if (!token) throw new UnauthorizedException("Token ausente.");
 
-    const payload = await this.jwt.verifyAsync(token, {
-      secret: process.env.JWT_ACCESS_SECRET ?? "dev-access-secret"
-    });
+    const payload = await this.jwt.verifyAsync<AuthUser>(token, { secret: process.env.JWT_ACCESS_SECRET ?? "dev-access-secret" });
     request.user = payload;
 
-    const required = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass()
     ]);
-    if (!required?.length) return true;
+    if (requiredRoles?.length) {
+      const grantedRoles = new Set(payload.roles ?? []);
+      if (!requiredRoles.some((role) => grantedRoles.has(role))) {
+        throw new ForbiddenException("Papel insuficiente.");
+      }
+    }
+
+    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
+      context.getHandler(),
+      context.getClass()
+    ]);
+    if (!requiredPermissions?.length) return true;
 
     const granted = new Set<string>(payload.permissions ?? []);
-    if (required.every((permission) => granted.has(permission))) return true;
-    throw new UnauthorizedException("Permissao insuficiente.");
+    if (requiredPermissions.every((permission) => granted.has(permission))) return true;
+    throw new ForbiddenException("Permissao insuficiente.");
   }
 
   private extractToken(request: Request) {

@@ -2,9 +2,19 @@ import { Body, Controller, Get, Post, Req, Res } from "@nestjs/common";
 import { Request, Response } from "express";
 import { ApiTags } from "@nestjs/swagger";
 import { CurrentUser, AuthUser } from "../../security/auth-user.decorator";
+import { AuditAction } from "../../security/audit.decorator";
 import { Public } from "../../security/public.decorator";
 import { AuthService } from "./auth.service";
-import { LoginDto, OnboardingDto, RegisterDto, VerifyTotpDto } from "./auth.dto";
+import {
+  ConfirmEmailDto,
+  LoginDto,
+  OnboardingDto,
+  RegisterDto,
+  RequestPasswordResetDto,
+  ResendEmailVerificationDto,
+  ResetPasswordDto,
+  VerifyTotpDto
+} from "./auth.dto";
 
 @ApiTags("auth")
 @Controller("auth")
@@ -15,6 +25,30 @@ export class AuthController {
   @Post("register")
   register(@Body() body: RegisterDto) {
     return this.auth.register(body);
+  }
+
+  @Public()
+  @Post("email/confirm")
+  confirmEmail(@Body() body: ConfirmEmailDto) {
+    return this.auth.confirmEmail(body.token);
+  }
+
+  @Public()
+  @Post("email/resend")
+  resendEmailVerification(@Body() body: ResendEmailVerificationDto) {
+    return this.auth.resendEmailVerification(body.email, body.turnstileToken);
+  }
+
+  @Public()
+  @Post("password/forgot")
+  requestPasswordReset(@Body() body: RequestPasswordResetDto) {
+    return this.auth.requestPasswordReset(body.email, body.turnstileToken);
+  }
+
+  @Public()
+  @Post("password/reset")
+  resetPassword(@Body() body: ResetPasswordDto) {
+    return this.auth.resetPassword(body.token, body.password);
   }
 
   @Public()
@@ -33,6 +67,7 @@ export class AuthController {
     return result;
   }
 
+  @AuditAction("auth.logout")
   @Post("logout")
   async logout(@CurrentUser() user: AuthUser, @Res({ passthrough: true }) response: Response) {
     response.clearCookie("access_token");
@@ -45,11 +80,13 @@ export class AuthController {
     return this.auth.me(user.id);
   }
 
+  @AuditAction("auth.2fa.setup")
   @Post("2fa/setup")
   setupTotp(@CurrentUser() user: AuthUser) {
     return this.auth.createTotpSetup(user.id);
   }
 
+  @AuditAction("auth.2fa.verify")
   @Post("2fa/verify")
   verifyTotp(@CurrentUser() user: AuthUser, @Body() body: VerifyTotpDto) {
     return this.auth.verifyTotp(user.id, body.code);

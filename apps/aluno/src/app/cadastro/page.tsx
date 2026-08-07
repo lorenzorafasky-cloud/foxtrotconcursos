@@ -8,6 +8,8 @@ import { apiRequest } from "../../lib/api";
 
 type RegisterResponse = {
   twoFactorSetup?: { qrCodeDataUrl: string; secret: string };
+  devVerificationUrl?: string;
+  emailVerificationSent?: boolean;
   rankingNotice?: string;
 };
 
@@ -28,7 +30,7 @@ export default function RegisterPage() {
         body: JSON.stringify({ fullName, nickname, email, password })
       });
       setResult(response);
-      setStatus("Conta criada. Configure o 2FA antes de seguir.");
+      setStatus("Conta criada. Confirme o e-mail e guarde o 2FA antes de seguir.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Falha no cadastro.");
     }
@@ -61,6 +63,11 @@ export default function RegisterPage() {
           </div>
           <Button className="mt-6" type="submit"><UserPlus className="h-4 w-4" /> Criar conta</Button>
           <p className="mt-4 min-h-5 text-sm text-zinc-400">{status}</p>
+          {result?.devVerificationUrl && (
+            <Link className="block break-all text-sm text-foxtrot-400" href={result.devVerificationUrl}>
+              Confirmar e-mail em desenvolvimento
+            </Link>
+          )}
           <Link className="text-sm text-foxtrot-400" href="/login">Ja tenho conta</Link>
         </form>
         <aside className="rounded-md border border-zinc-800 bg-zinc-950 p-6">

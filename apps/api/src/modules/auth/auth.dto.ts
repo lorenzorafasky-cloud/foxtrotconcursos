@@ -9,9 +9,11 @@ export class RegisterDto {
   password!: string;
 
   @IsString()
+  @MinLength(2)
   fullName!: string;
 
   @IsString()
+  @MinLength(2)
   nickname!: string;
 
   @IsOptional()
@@ -42,6 +44,38 @@ export class LoginDto {
 export class VerifyTotpDto {
   @IsString()
   code!: string;
+}
+
+export class ConfirmEmailDto {
+  @IsString()
+  token!: string;
+}
+
+export class ResendEmailVerificationDto {
+  @IsEmail()
+  email!: string;
+
+  @IsOptional()
+  @IsString()
+  turnstileToken?: string;
+}
+
+export class RequestPasswordResetDto {
+  @IsEmail()
+  email!: string;
+
+  @IsOptional()
+  @IsString()
+  turnstileToken?: string;
+}
+
+export class ResetPasswordDto {
+  @IsString()
+  token!: string;
+
+  @IsString()
+  @MinLength(8)
+  password!: string;
 }
 
 export class OnboardingDto {

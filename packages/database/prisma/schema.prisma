@@ -34,6 +34,20 @@ enum PaymentStatus {
   CANCELED
 }
 
+enum BillingInterval {
+  ONE_TIME
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
 enum LessonAssetType {
   VIDEO
   TRANSCRIPT
@@ -60,6 +74,11 @@ enum RelevanceVote {
   NOT_RELEVANT
 }
 
+enum SimulationStatus {
+  IN_PROGRESS
+  SUBMITTED
+}
+
 enum TaskPriority {
   LOW
   NORMAL
@@ -79,6 +98,50 @@ enum FeatureFlagKey {
   LIVE_CLASSES
 }
 
+enum NotificationType {
+  SYSTEM
+  ACHIEVEMENT
+  CHALLENGE
+  RANKING
+}
+
+enum ChallengeStatus {
+  DRAFT
+  ACTIVE
+  FINISHED
+}
+
+enum AiJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  NEEDS_REVIEW
+}
+
+enum AiReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DataSubjectRequestType {
+  ACCESS
+  CORRECTION
+  DELETION
+  PORTABILITY
+  ANONYMIZATION
+  CONSENT_WITHDRAWAL
+  AUTOMATED_DECISION_REVIEW
+}
+
+enum DataSubjectRequestStatus {
+  OPEN
+  IN_REVIEW
+  COMPLETED
+  REJECTED
+}
+
 model User {
   id                 String              @id @default(cuid())
   email              String              @unique
@@ -86,6 +149,7 @@ model User {
   fullName           String
   nickname           String              @unique
   avatarUrl          String?
+  emailVerifiedAt    DateTime?
   twoFactorSecret    String?
   twoFactorEnabled   Boolean             @default(false)
   onboardingComplete Boolean             @default(false)
@@ -94,28 +158,69 @@ model User {
   roles              UserRole[]
   permissions        UserPermission[]
   backupCodes        BackupCode[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens PasswordResetToken[]
   refreshTokens      RefreshToken[]
   onboarding         OnboardingProfile?
+  courseEnrollments  CourseEnrollment[]
   entitlements       Entitlement[]
   ratings            LessonRating[]
   progress           LessonProgress[]
   questionAttempts   QuestionAttempt[]
   questionReactions  QuestionReaction[]
+  questionFavorites  QuestionFavorite[]
+  simulations        Simulation[]
   answers            QuestionAnswer[]
   notes              Note[]
   lists              StudyList[]
+  studyGoals         StudyGoal[]
+  productivityPreference UserProductivityPreference?
   focusSessions      FocusSession[]
   flashcards         Flashcard[]
   postIts            PostIt[]
   xpEvents           XpEvent[]
+  achievements       UserAchievement[]
+  challengeParticipants ChallengeParticipant[]
+  notifications      Notification[]
   auditLogs          AuditLog[]          @relation("AuditActor")
   impersonatedLogs   AuditLog[]          @relation("AuditSubject")
   payments           Payment[]
+  subscriptions      Subscription[]
+  couponRedemptions  CouponRedemption[]
+  aiUsageEvents      AiUsageEvent[]
+  aiJobs             AiAutomationJob[]
+  aiReviews          AiReviewItem[]
+  privacyConsents    PrivacyConsent[]
+  dataSubjectRequests DataSubjectRequest[]
   teachingSubjects   ProfessorSubject[]
   taughtLessons      Lesson[]
   lessonDoubts       LessonDoubt[]
   essaySubmissions   EssaySubmission[]   @relation("EssayStudent")
   essayCorrections   EssaySubmission[]   @relation("EssayTeacher")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
 }
 
 model Role {
@@ -274,10 +379,26 @@ model Course {
   career          Career         @relation(fields: [careerId], references: [id])
   board           Board?         @relation(fields: [boardId], references: [id])
   modules         CourseModule[]
+  enrollments     CourseEnrollment[]
   entitlements    Entitlement[]
   payments        Payment[]
+  plans           Plan[]
 
   @@index([careerId, status])
+}
+
+model CourseEnrollment {
+  id          String    @id @default(cuid())
+  userId      String
+  courseId    String
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([userId, createdAt])
 }
 
 model CourseModule {
@@ -390,6 +511,8 @@ model Question {
   position       Position           @relation(fields: [positionId], references: [id])
   attempts       QuestionAttempt[]
   reactions      QuestionReaction[]
+  favorites      QuestionFavorite[]
+  simulationItems SimulationQuestion[]
   answers        QuestionAnswer[]
   aiAnswer       QuestionAiAnswer?
   notes          Note[]
@@ -404,14 +527,60 @@ model QuestionAttempt {
   id             String   @id @default(cuid())
   userId         String
   questionId     String
+  simulationId   String?
   selectedAnswer String?
   isCorrect      Boolean?
   timeSeconds    Int
   createdAt      DateTime @default(now())
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   question       Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  simulation     Simulation? @relation(fields: [simulationId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([questionId])
+  @@index([simulationId, questionId])
+}
+
+model QuestionFavorite {
+  id         String   @id @default(cuid())
+  userId     String
+  questionId String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@index([userId, createdAt])
+}
+
+model Simulation {
+  id            String               @id @default(cuid())
+  userId        String
+  title         String
+  status        SimulationStatus     @default(IN_PROGRESS)
+  filters       Json?
+  questionCount Int
+  startedAt     DateTime             @default(now())
+  submittedAt   DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questions     SimulationQuestion[]
+  attempts      QuestionAttempt[]
+
+  @@index([userId, status, createdAt])
+}
+
+model SimulationQuestion {
+  id           String     @id @default(cuid())
+  simulationId String
+  questionId   String
+  position     Int
+  simulation   Simulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  question     Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([simulationId, questionId])
+  @@unique([simulationId, position])
   @@index([questionId])
 }
 
@@ -449,6 +618,93 @@ model QuestionAiAnswer {
   model       String
   createdAt   DateTime @default(now())
   question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model AiUsageEvent {
+  id             String   @id @default(cuid())
+  userId         String
+  provider       String
+  model          String
+  feature        String
+  inputTokens    Int      @default(0)
+  outputTokens   Int      @default(0)
+  costCents      Int      @default(0)
+  requestId      String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, feature, createdAt])
+  @@index([provider, model, createdAt])
+}
+
+model AiAutomationJob {
+  id          String      @id @default(cuid())
+  userId      String
+  type        String
+  status      AiJobStatus @default(PENDING)
+  input       Json
+  output      Json?
+  error       String?
+  attempts    Int         @default(0)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+}
+
+model AiReviewItem {
+  id          String         @id @default(cuid())
+  userId      String
+  type        String
+  entityType  String
+  entityId    String?
+  status      AiReviewStatus @default(PENDING)
+  content     Json
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime       @default(now())
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, type, createdAt])
+  @@index([entityType, entityId])
+}
+
+model PrivacyConsent {
+  id        String   @id @default(cuid())
+  userId    String?
+  subject   String
+  version   String
+  accepted  Boolean
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, subject, createdAt])
+  @@index([subject, version, createdAt])
+}
+
+model DataSubjectRequest {
+  id          String                   @id @default(cuid())
+  userId      String
+  type        DataSubjectRequestType
+  status      DataSubjectRequestStatus @default(OPEN)
+  description String?
+  response    String?
+  metadata    Json?
+  completedAt DateTime?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  user        User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, createdAt])
+  @@index([type, status, createdAt])
 }
 
 model EssayRubric {
@@ -523,6 +779,36 @@ model StudyTask {
   @@index([listId, dueDate, completedAt])
 }
 
+model StudyGoal {
+  id               String    @id @default(cuid())
+  userId           String
+  title            String
+  period           String
+  targetNetSeconds Int       @default(0)
+  targetQuestions  Int       @default(0)
+  targetFlashcards Int       @default(0)
+  startsAt         DateTime  @default(now())
+  endsAt           DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startsAt, endsAt])
+}
+
+model UserProductivityPreference {
+  userId          String    @id
+  focusMode       FocusMode @default(POMODORO)
+  pomodoroSeconds Int       @default(1500)
+  breakSeconds    Int       @default(300)
+  longBreakSeconds Int      @default(900)
+  autoStartBreaks Boolean   @default(false)
+  soundSettings   Json?
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 model FocusSession {
   id           String    @id @default(cuid())
   userId       String
@@ -549,6 +835,7 @@ model Flashcard {
   intervalDays   Int      @default(0)
   repetitions    Int      @default(0)
   dueAt          DateTime @default(now())
+  favorite       Boolean  @default(false)
   createdAt      DateTime @default(now())
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -571,11 +858,15 @@ model XpEvent {
   userId    String
   source    String
   points    Int
+  ruleKey   String?
+  idempotencyKey String? @unique
+  revokedAt DateTime?
   metadata  Json?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([ruleKey, createdAt])
 }
 
 model LeaderboardSnapshot {
@@ -588,40 +879,249 @@ model LeaderboardSnapshot {
   @@index([scope, period, createdAt])
 }
 
+model AchievementDefinition {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  title       String
+  description String
+  icon        String
+  requirement Json
+  xpReward    Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       UserAchievement[]
+}
+
+model UserAchievement {
+  id            String                @id @default(cuid())
+  userId        String
+  achievementId String
+  awardedAt     DateTime              @default(now())
+  metadata      Json?
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   AchievementDefinition @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId, awardedAt])
+}
+
+model Challenge {
+  id           String                 @id @default(cuid())
+  slug         String                 @unique
+  title        String
+  description  String
+  status       ChallengeStatus        @default(DRAFT)
+  metric       String
+  targetValue  Int
+  rewardXp     Int                    @default(0)
+  startsAt     DateTime
+  endsAt       DateTime
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  participants ChallengeParticipant[]
+
+  @@index([status, startsAt, endsAt])
+}
+
+model ChallengeParticipant {
+  id              String    @id @default(cuid())
+  challengeId     String
+  userId          String
+  progress        Int       @default(0)
+  completedAt     DateTime?
+  rewardClaimedAt DateTime?
+  joinedAt        DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  challenge       Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@index([userId, completedAt])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType @default(SYSTEM)
+  title     String
+  body      String
+  actionUrl String?
+  metadata  Json?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
 model Entitlement {
   id        String          @id @default(cuid())
   userId    String
   type      EntitlementType
   courseId  String?
+  subscriptionId String?
   startsAt  DateTime        @default(now())
   endsAt    DateTime?
   source    String
   user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   course    Course?         @relation(fields: [courseId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
 
   @@index([userId, type, endsAt])
+  @@index([subscriptionId])
+}
+
+model Plan {
+  id                  String          @id @default(cuid())
+  code                String          @unique
+  name                String
+  description         String
+  interval            BillingInterval
+  amountCents         Int
+  currency            String          @default("BRL")
+  entitlementType     EntitlementType
+  courseId            String?
+  provider            String          @default("stripe")
+  providerPriceId     String?
+  active              Boolean         @default(true)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  subscriptions       Subscription[]
+  payments            Payment[]
+  course              Course?         @relation(fields: [courseId], references: [id])
+
+  @@index([active, interval])
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  userId                 String
+  planId                 String
+  provider               String
+  providerCustomerId     String?
+  providerSubscriptionId String?            @unique
+  status                 SubscriptionStatus @default(INCOMPLETE)
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  canceledAt             DateTime?
+  metadata               Json?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                   Plan               @relation(fields: [planId], references: [id])
+  payments               Payment[]
+  entitlements           Entitlement[]
+
+  @@index([userId, status])
 }
 
 model Payment {
   id                 String        @id @default(cuid())
   userId             String
   courseId           String?
+  planId             String?
+  subscriptionId     String?
+  couponId           String?
   provider           String
   providerPaymentId  String?       @unique
+  providerCustomerId String?
+  providerSubscriptionId String?
+  idempotencyKey     String?       @unique
   amountCents        Int
+  discountCents      Int           @default(0)
   currency           String        @default("BRL")
   status             PaymentStatus @default(PENDING)
   metadata           Json?
+  paidAt             DateTime?
+  failedAt           DateTime?
+  canceledAt         DateTime?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
   user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   course             Course?       @relation(fields: [courseId], references: [id])
+  plan               Plan?         @relation(fields: [planId], references: [id])
+  subscription       Subscription? @relation(fields: [subscriptionId], references: [id])
+  coupon             Coupon?       @relation(fields: [couponId], references: [id])
+  couponRedemptions  CouponRedemption[]
+
+  @@index([userId, status, createdAt])
+  @@index([subscriptionId, createdAt])
+}
+
+model Coupon {
+  id                 String   @id @default(cuid())
+  code               String   @unique
+  description        String?
+  percentOff         Int?
+  amountOffCents     Int?
+  maxRedemptions     Int?
+  redeemedCount      Int      @default(0)
+  startsAt           DateTime @default(now())
+  endsAt             DateTime?
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  payments           Payment[]
+  redemptions        CouponRedemption[]
+
+  @@index([active, startsAt, endsAt])
+}
+
+model CouponRedemption {
+  id        String   @id @default(cuid())
+  couponId  String
+  userId    String
+  paymentId String?
+  amountCents Int
+  createdAt DateTime @default(now())
+  coupon    Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([couponId, createdAt])
+  @@index([userId, createdAt])
+  @@index([paymentId])
+}
+
+model PaymentWebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  eventId     String
+  type        String
+  payload     Json
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@index([provider, type, createdAt])
 }
 
 model FeatureFlag {
   key       FeatureFlagKey @id
   enabled   Boolean        @default(false)
   updatedAt DateTime       @updatedAt
+}
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model ModerationCase {
+  id          String   @id @default(cuid())
+  contentType String
+  contentId   String
+  action      String
+  reason      String
+  actorId     String
+  createdAt   DateTime @default(now())
+
+  @@index([contentType, contentId])
+  @@index([actorId, createdAt])
 }
 
 model PsychologyProfessional {

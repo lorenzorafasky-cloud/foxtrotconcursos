@@ -2,27 +2,59 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { LogIn, ShieldCheck } from "lucide-react";
+import { LogIn, RotateCw, ShieldCheck } from "lucide-react";
 import { BrandMark, Button } from "@foxtrot/ui";
 import { apiRequest } from "../../lib/api";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("aluno@foxtrot.local");
-  const [password, setPassword] = useState("Foxtrot@123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
+  const [needsEmail, setNeedsEmail] = useState(false);
   const [status, setStatus] = useState("");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setNeedsEmail(false);
     setStatus("Autenticando...");
     try {
-      const result = await apiRequest<{ requiresTwoFactor?: boolean; user?: { nickname: string } }>("/auth/login", {
+      const result = await apiRequest<{
+        requiresTwoFactor?: boolean;
+        emailVerificationRequired?: boolean;
+        message?: string;
+        user?: { nickname: string; roles: string[] };
+      }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password, twoFactorCode: twoFactorCode || undefined })
       });
-      setStatus(result.requiresTwoFactor ? "Informe o codigo 2FA para concluir." : `Bem-vindo, ${result.user?.nickname ?? "operador"}.`);
+      if (result.emailVerificationRequired) {
+        setNeedsEmail(true);
+        setStatus(result.message ?? "Confirme seu e-mail antes de entrar.");
+        return;
+      }
+      if (result.requiresTwoFactor) {
+        setNeedsTwoFactor(true);
+        setStatus("Informe o codigo 2FA para concluir.");
+        return;
+      }
+      setStatus(`Bem-vindo, ${result.user?.nickname ?? "operador"}. Redirecionando...`);
+      window.location.href = "/";
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Falha no login.");
+    }
+  }
+
+  async function resendVerification() {
+    setStatus("Enviando novo link...");
+    try {
+      const result = await apiRequest<{ message: string; devVerificationUrl?: string }>("/auth/email/resend", {
+        method: "POST",
+        body: JSON.stringify({ email })
+      });
+      setStatus(result.devVerificationUrl ? `${result.message} Link local: ${result.devVerificationUrl}` : result.message);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Falha ao reenviar confirmacao.");
     }
   }
 
@@ -38,7 +70,7 @@ export default function LoginPage() {
           <BrandMark />
           <div>
             <h1 className="font-display text-5xl font-black uppercase text-white">Entrar na operacao</h1>
-            <p className="mt-3 max-w-xl text-zinc-300">Acesse aulas, questoes, foco e ranking com sessao protegida por JWT e 2FA.</p>
+          <p className="mt-3 max-w-xl text-zinc-300">Acesse aulas, questoes, foco e ranking com sessao protegida por JWT, cookies seguros e 2FA.</p>
           </div>
         </div>
       </section>
@@ -58,10 +90,16 @@ export default function LoginPage() {
           </label>
           <label className="mt-4 block text-sm text-zinc-300">
             Codigo 2FA
-            <input className="mt-2 h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-white outline-none focus:border-orange-500" value={twoFactorCode} onChange={(event) => setTwoFactorCode(event.target.value)} inputMode="numeric" />
+            <input className="mt-2 h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-white outline-none focus:border-orange-500 disabled:opacity-60" value={twoFactorCode} onChange={(event) => setTwoFactorCode(event.target.value)} inputMode="numeric" disabled={!needsTwoFactor} />
           </label>
           <Button className="mt-6 w-full" type="submit"><LogIn className="h-4 w-4" /> Entrar</Button>
           <p className="mt-4 min-h-5 text-sm text-zinc-400">{status}</p>
+          {needsEmail && (
+            <button type="button" onClick={resendVerification} className="mt-2 inline-flex items-center gap-2 text-sm text-foxtrot-400">
+              <RotateCw className="h-4 w-4" /> Reenviar confirmacao
+            </button>
+          )}
+          <Link className="mt-4 block text-sm text-zinc-500" href="/recuperar-senha">Esqueci minha senha</Link>
           <Link className="mt-4 inline-flex items-center gap-2 text-sm text-foxtrot-400" href="/cadastro">
             <ShieldCheck className="h-4 w-4" /> Criar conta operacional
           </Link>

@@ -1,5 +1,5 @@
 import argon2 from "argon2";
-import { PrismaClient, RoleName, CourseStatus, FeatureFlagKey, QuestionKind } from "@prisma/client";
+import { PrismaClient, RoleName, CourseStatus, FeatureFlagKey, QuestionKind, ChallengeStatus, BillingInterval, EntitlementType } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -16,20 +16,28 @@ const rolePermissions: Record<RoleName, string[]> = {
     "student:access-courses",
     "student:access-questions",
     "student:use-focus",
-    "student:use-planner"
+    "student:use-planner",
+    "student:use-gamification",
+    "student:use-ai",
+    "ai:generate-materials",
+    "ai:review-materials"
   ],
-  PROFESSOR: ["teacher:answer-questions", "teacher:publish-lessons", "teacher:grade-essays"],
+  PROFESSOR: ["teacher:answer-questions", "teacher:publish-lessons", "teacher:grade-essays", "ai:generate-materials", "ai:review-materials"],
   ALUNO_ILIMITADO: [
     "student:access-courses",
     "student:access-questions",
     "student:use-focus",
-    "student:use-planner"
+    "student:use-planner",
+    "student:use-gamification",
+    "student:use-ai"
   ],
   ALUNO_CURSO_ESPECIFICO: [
     "student:access-courses",
     "student:access-questions",
     "student:use-focus",
-    "student:use-planner"
+    "student:use-planner",
+    "student:use-gamification",
+    "student:use-ai"
   ]
 };
 
@@ -85,6 +93,7 @@ async function createUser(email: string, roleName: RoleName, fullName: string, n
       email,
       fullName,
       nickname,
+      emailVerifiedAt: new Date(),
       passwordHash,
       twoFactorEnabled: false
     }
@@ -254,6 +263,158 @@ async function seedCatalog() {
   return { course };
 }
 
+async function seedGamification() {
+  const achievements = [
+    {
+      key: "first-focus-session",
+      title: "Primeira Area Foco",
+      description: "Registrou a primeira sessao de foco.",
+      icon: "timer",
+      xpReward: 20,
+      requirement: { metric: "focusSessions", target: 1 }
+    },
+    {
+      key: "ten-correct-questions",
+      title: "Mira calibrada",
+      description: "Acertou 10 questoes.",
+      icon: "target",
+      xpReward: 50,
+      requirement: { metric: "correctQuestions", target: 10 }
+    },
+    {
+      key: "five-day-streak",
+      title: "Consistencia operacional",
+      description: "Manteve 5 dias ativos de estudo.",
+      icon: "flame",
+      xpReward: 80,
+      requirement: { metric: "streakDays", target: 5 }
+    },
+    {
+      key: "thousand-xp",
+      title: "Subida de patente",
+      description: "Alcancou 1000 XP acumulados.",
+      icon: "trophy",
+      xpReward: 120,
+      requirement: { metric: "totalXp", target: 1000 }
+    }
+  ];
+
+  for (const achievement of achievements) {
+    await prisma.achievementDefinition.upsert({
+      where: { key: achievement.key },
+      update: achievement,
+      create: achievement
+    });
+  }
+
+  const now = new Date();
+  const endsAt = new Date(now);
+  endsAt.setDate(endsAt.getDate() + 7);
+  await prisma.challenge.upsert({
+    where: { slug: "semana-operacional-300-min" },
+    update: {
+      title: "Semana operacional",
+      description: "Complete 300 minutos liquidos de foco nesta semana.",
+      status: ChallengeStatus.ACTIVE,
+      metric: "weeklyNetMinutes",
+      targetValue: 300,
+      rewardXp: 150,
+      startsAt: now,
+      endsAt
+    },
+    create: {
+      slug: "semana-operacional-300-min",
+      title: "Semana operacional",
+      description: "Complete 300 minutos liquidos de foco nesta semana.",
+      status: ChallengeStatus.ACTIVE,
+      metric: "weeklyNetMinutes",
+      targetValue: 300,
+      rewardXp: 150,
+      startsAt: now,
+      endsAt
+    }
+  });
+}
+
+async function seedBilling(courseId: string) {
+  await prisma.plan.upsert({
+    where: { code: "curso-avulso" },
+    update: {
+      name: "Curso avulso",
+      description: "Acesso vitalicio ao curso selecionado.",
+      interval: BillingInterval.ONE_TIME,
+      amountCents: 9900,
+      entitlementType: EntitlementType.COURSE,
+      active: true
+    },
+    create: {
+      code: "curso-avulso",
+      name: "Curso avulso",
+      description: "Acesso vitalicio ao curso selecionado.",
+      interval: BillingInterval.ONE_TIME,
+      amountCents: 9900,
+      entitlementType: EntitlementType.COURSE,
+      active: true
+    }
+  });
+
+  await prisma.plan.upsert({
+    where: { code: "ilimitado-mensal" },
+    update: {
+      name: "Foxtrot Ilimitado Mensal",
+      description: "Acesso a cursos, questoes e produtividade enquanto a assinatura estiver ativa.",
+      interval: BillingInterval.MONTHLY,
+      amountCents: 12990,
+      entitlementType: EntitlementType.UNLIMITED,
+      active: true
+    },
+    create: {
+      code: "ilimitado-mensal",
+      name: "Foxtrot Ilimitado Mensal",
+      description: "Acesso a cursos, questoes e produtividade enquanto a assinatura estiver ativa.",
+      interval: BillingInterval.MONTHLY,
+      amountCents: 12990,
+      entitlementType: EntitlementType.UNLIMITED,
+      active: true
+    }
+  });
+
+  await prisma.plan.upsert({
+    where: { code: "operacao-pf-anual" },
+    update: {
+      name: "Operacao PF Anual",
+      description: "Assinatura anual do curso Operacao PF.",
+      interval: BillingInterval.YEARLY,
+      amountCents: 99900,
+      entitlementType: EntitlementType.COURSE,
+      courseId,
+      active: true
+    },
+    create: {
+      code: "operacao-pf-anual",
+      name: "Operacao PF Anual",
+      description: "Assinatura anual do curso Operacao PF.",
+      interval: BillingInterval.YEARLY,
+      amountCents: 99900,
+      entitlementType: EntitlementType.COURSE,
+      courseId,
+      active: true
+    }
+  });
+
+  await prisma.coupon.upsert({
+    where: { code: "FOXTROT10" },
+    update: { percentOff: 10, active: true },
+    create: {
+      code: "FOXTROT10",
+      description: "Desconto inicial para alunos Foxtrot.",
+      percentOff: 10,
+      maxRedemptions: 100,
+      active: true
+    }
+  });
+}
+
 async function main() {
   await seedRoles();
 
@@ -262,6 +423,8 @@ async function main() {
   const student = await createUser("aluno@foxtrot.local", "ALUNO_ILIMITADO", "Aluno Foxtrot", "recruta01");
 
   const { course } = await seedCatalog();
+  await seedGamification();
+  await seedBilling(course.id);
 
   await prisma.entitlement.upsert({
     where: { id: "seed-entitlement-unlimited" },

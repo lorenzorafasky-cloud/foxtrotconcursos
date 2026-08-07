@@ -29,9 +29,93 @@
         ]
       }
     },
+    "/auth/email/confirm": {
+      "post": {
+        "operationId": "AuthController_confirmEmail",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/email/resend": {
+      "post": {
+        "operationId": "AuthController_resendEmailVerification",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/password/forgot": {
+      "post": {
+        "operationId": "AuthController_requestPasswordReset",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/password/reset": {
+      "post": {
+        "operationId": "AuthController_resetPassword",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/login": {
       "post": {
         "operationId": "AuthController_login",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
         "parameters": [],
         "responses": {
           "201": {
@@ -113,6 +197,20 @@
         ]
       }
     },
+    "/me/courses": {
+      "get": {
+        "operationId": "CoursesController_myCourses",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "courses"
+        ]
+      }
+    },
     "/courses/{slug}": {
       "get": {
         "operationId": "CoursesController_detail",
@@ -127,9 +225,51 @@
         ]
       }
     },
+    "/courses/{slug}/enroll": {
+      "post": {
+        "operationId": "CoursesController_enroll",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "courses"
+        ]
+      }
+    },
     "/lessons/{id}": {
       "get": {
         "operationId": "CoursesController_lesson",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "courses"
+        ]
+      }
+    },
+    "/lessons/{id}/playback": {
+      "get": {
+        "operationId": "CoursesController_playback",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "courses"
+        ]
+      }
+    },
+    "/lessons/{id}/materials/{assetId}/download": {
+      "get": {
+        "operationId": "CoursesController_downloadMaterial",
         "parameters": [],
         "responses": {
           "200": {
@@ -239,6 +379,130 @@
         ]
       }
     },
+    "/questions/history": {
+      "get": {
+        "operationId": "QuestionsController_history",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/favorites": {
+      "get": {
+        "operationId": "QuestionsController_favorites",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/review/errors": {
+      "get": {
+        "operationId": "QuestionsController_reviewErrors",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/simulations": {
+      "get": {
+        "operationId": "QuestionsController_simulations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      },
+      "post": {
+        "operationId": "QuestionsController_createSimulation",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/simulations/{id}": {
+      "get": {
+        "operationId": "QuestionsController_simulationDetail",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/simulations/{id}/attempts": {
+      "post": {
+        "operationId": "QuestionsController_simulationAttempt",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/simulations/{id}/submit": {
+      "post": {
+        "operationId": "QuestionsController_submitSimulation",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/simulations/{id}/results": {
+      "get": {
+        "operationId": "QuestionsController_simulationResults",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
     "/questions/notes": {
       "get": {
         "operationId": "QuestionsController_notes",
@@ -293,6 +557,32 @@
         ]
       }
     },
+    "/questions/{id}/favorite": {
+      "post": {
+        "operationId": "QuestionsController_favorite",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      },
+      "delete": {
+        "operationId": "QuestionsController_unfavorite",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
     "/questions/{id}/reactions": {
       "post": {
         "operationId": "QuestionsController_reaction",
@@ -332,6 +622,20 @@
         },
         "tags": [
           "questions"
+        ]
+      }
+    },
+    "/planner/dashboard": {
+      "get": {
+        "operationId": "PlannerController_dashboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "planner"
         ]
       }
     },
@@ -375,9 +679,63 @@
         ]
       }
     },
+    "/planner/tasks/{id}": {
+      "patch": {
+        "operationId": "PlannerController_updateTask",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "planner"
+        ]
+      }
+    },
     "/planner/tasks/{id}/complete": {
       "patch": {
         "operationId": "PlannerController_complete",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "planner"
+        ]
+      }
+    },
+    "/planner/goals": {
+      "get": {
+        "operationId": "PlannerController_goals",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "planner"
+        ]
+      },
+      "post": {
+        "operationId": "PlannerController_createGoal",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "planner"
+        ]
+      }
+    },
+    "/planner/goals/{id}": {
+      "patch": {
+        "operationId": "PlannerController_updateGoal",
         "parameters": [],
         "responses": {
           "200": {
@@ -409,6 +767,32 @@
         "parameters": [],
         "responses": {
           "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "focus"
+        ]
+      }
+    },
+    "/focus/preferences": {
+      "get": {
+        "operationId": "FocusController_preferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "focus"
+        ]
+      },
+      "patch": {
+        "operationId": "FocusController_updatePreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
             "description": ""
           }
         },
@@ -457,6 +841,34 @@
         ]
       }
     },
+    "/focus/flashcards/{id}/review": {
+      "post": {
+        "operationId": "FocusController_reviewFlashcard",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "focus"
+        ]
+      }
+    },
+    "/focus/flashcards/{id}/favorite": {
+      "patch": {
+        "operationId": "FocusController_favoriteFlashcard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "focus"
+        ]
+      }
+    },
     "/focus/post-its": {
       "get": {
         "operationId": "FocusController_postIts",
@@ -483,9 +895,79 @@
         ]
       }
     },
+    "/payments/plans": {
+      "get": {
+        "operationId": "PaymentsController_plans",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "payments"
+        ]
+      }
+    },
     "/payments/checkout": {
       "post": {
         "operationId": "PaymentsController_checkout",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/payments/access": {
+      "get": {
+        "operationId": "PaymentsController_access",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/payments/history": {
+      "get": {
+        "operationId": "PaymentsController_history",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/payments/subscriptions": {
+      "get": {
+        "operationId": "PaymentsController_subscriptions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/payments/subscriptions/{id}/cancel": {
+      "post": {
+        "operationId": "PaymentsController_cancelSubscription",
         "parameters": [],
         "responses": {
           "201": {
@@ -525,6 +1007,20 @@
         ]
       }
     },
+    "/admin/catalog": {
+      "get": {
+        "operationId": "AdminController_catalog",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/users": {
       "get": {
         "operationId": "AdminController_users",
@@ -537,14 +1033,122 @@
         "tags": [
           "admin"
         ]
+      },
+      "post": {
+        "operationId": "AdminController_createUser",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/users/{id}": {
+      "patch": {
+        "operationId": "AdminController_updateUser",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/users/{id}/roles": {
+      "patch": {
+        "operationId": "AdminController_setUserRoles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/users/{id}/permissions/{key}": {
+      "patch": {
+        "operationId": "AdminController_setUserPermission",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/roles": {
+      "get": {
+        "operationId": "AdminController_roles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/roles/{name}/permissions": {
+      "patch": {
+        "operationId": "AdminController_setRolePermissions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
       }
     },
     "/admin/courses": {
+      "get": {
+        "operationId": "AdminController_courses",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
       "post": {
         "operationId": "AdminController_createCourse",
         "parameters": [],
         "responses": {
           "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/courses/{id}": {
+      "patch": {
+        "operationId": "AdminController_updateCourse",
+        "parameters": [],
+        "responses": {
+          "200": {
             "description": ""
           }
         },
@@ -567,12 +1171,232 @@
         ]
       }
     },
+    "/admin/professors": {
+      "get": {
+        "operationId": "AdminController_professors",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/professors/{userId}/subjects": {
+      "post": {
+        "operationId": "AdminController_assignProfessorSubject",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/professors/{userId}/subjects/{subjectId}": {
+      "delete": {
+        "operationId": "AdminController_removeProfessorSubject",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/enrollments": {
+      "get": {
+        "operationId": "AdminController_enrollments",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminController_grantEnrollment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/enrollments/{userId}/{courseId}": {
+      "delete": {
+        "operationId": "AdminController_revokeEnrollment",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/questions": {
+      "get": {
+        "operationId": "AdminController_questions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/questions/{id}": {
+      "patch": {
+        "operationId": "AdminController_updateQuestion",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/questions/import": {
       "post": {
         "operationId": "AdminController_importQuestions",
         "parameters": [],
         "responses": {
           "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/simulations": {
+      "get": {
+        "operationId": "AdminController_simulations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/payments": {
+      "get": {
+        "operationId": "AdminController_payments",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/payments/{id}/status": {
+      "patch": {
+        "operationId": "AdminController_updatePayment",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/coupons": {
+      "get": {
+        "operationId": "AdminController_coupons",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminController_createCoupon",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/coupons/{id}": {
+      "patch": {
+        "operationId": "AdminController_updateCoupon",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/settings": {
+      "get": {
+        "operationId": "AdminController_settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/settings/{key}": {
+      "patch": {
+        "operationId": "AdminController_setSetting",
+        "parameters": [],
+        "responses": {
+          "200": {
             "description": ""
           }
         },
@@ -601,6 +1425,32 @@
         "parameters": [],
         "responses": {
           "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/moderation": {
+      "get": {
+        "operationId": "AdminController_moderation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminController_moderate",
+        "parameters": [],
+        "responses": {
+          "201": {
             "description": ""
           }
         },
@@ -651,12 +1501,110 @@
         ]
       }
     },
+    "/professor/catalog": {
+      "get": {
+        "operationId": "ProfessorController_catalog",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/professor/courses": {
+      "post": {
+        "operationId": "ProfessorController_createCourse",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/professor/courses/{id}": {
+      "patch": {
+        "operationId": "ProfessorController_updateCourse",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/professor/courses/{id}/publish": {
+      "patch": {
+        "operationId": "ProfessorController_publishCourse",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/professor/modules": {
+      "post": {
+        "operationId": "ProfessorController_createModule",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/professor/modules/{id}": {
+      "patch": {
+        "operationId": "ProfessorController_updateModule",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
     "/professor/lessons": {
       "post": {
         "operationId": "ProfessorController_createLesson",
         "parameters": [],
         "responses": {
           "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/professor/lessons/{id}": {
+      "patch": {
+        "operationId": "ProfessorController_updateLesson",
+        "parameters": [],
+        "responses": {
+          "200": {
             "description": ""
           }
         },
@@ -679,6 +1627,76 @@
         ]
       }
     },
+    "/professor/materials": {
+      "post": {
+        "operationId": "ProfessorController_createMaterial",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/professor/students": {
+      "get": {
+        "operationId": "ProfessorController_students",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/professor/questions": {
+      "post": {
+        "operationId": "ProfessorController_createQuestion",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/professor/simulations": {
+      "post": {
+        "operationId": "ProfessorController_createSimulation",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/professor/essays": {
+      "get": {
+        "operationId": "ProfessorController_essays",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
     "/professor/essays/{id}/grade": {
       "patch": {
         "operationId": "ProfessorController_gradeEssay",
@@ -690,6 +1708,350 @@
         },
         "tags": [
           "professor"
+        ]
+      }
+    },
+    "/gamification/dashboard": {
+      "get": {
+        "operationId": "GamificationController_dashboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "gamification"
+        ]
+      }
+    },
+    "/gamification/rules": {
+      "get": {
+        "operationId": "GamificationController_rules",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "gamification"
+        ]
+      }
+    },
+    "/gamification/leaderboard": {
+      "get": {
+        "operationId": "GamificationController_leaderboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "gamification"
+        ]
+      }
+    },
+    "/gamification/achievements": {
+      "get": {
+        "operationId": "GamificationController_achievements",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "gamification"
+        ]
+      }
+    },
+    "/gamification/challenges": {
+      "get": {
+        "operationId": "GamificationController_challenges",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "gamification"
+        ]
+      }
+    },
+    "/gamification/challenges/{id}/join": {
+      "post": {
+        "operationId": "GamificationController_joinChallenge",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "gamification"
+        ]
+      }
+    },
+    "/gamification/notifications": {
+      "get": {
+        "operationId": "GamificationController_notifications",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "gamification"
+        ]
+      }
+    },
+    "/gamification/notifications/{id}/read": {
+      "patch": {
+        "operationId": "GamificationController_markNotificationRead",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "gamification"
+        ]
+      }
+    },
+    "/gamification/stream": {
+      "get": {
+        "operationId": "GamificationController_stream",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "gamification"
+        ]
+      }
+    },
+    "/ai/search": {
+      "get": {
+        "operationId": "AiController_smartSearch",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/ai/study-support": {
+      "post": {
+        "operationId": "AiController_studySupport",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/ai/materials": {
+      "post": {
+        "operationId": "AiController_generateMaterial",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/ai/lessons/transcript": {
+      "post": {
+        "operationId": "AiController_organizeLessonTranscript",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/ai/automations": {
+      "post": {
+        "operationId": "AiController_createAutomation",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ai"
+        ]
+      },
+      "get": {
+        "operationId": "AiController_jobs",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/ai/reviews": {
+      "get": {
+        "operationId": "AiController_reviews",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/ai/reviews/{id}": {
+      "patch": {
+        "operationId": "AiController_reviewItem",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/ai/usage": {
+      "get": {
+        "operationId": "AiController_usage",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/privacy/consents": {
+      "post": {
+        "operationId": "PrivacyController_recordConsent",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "privacy"
+        ]
+      },
+      "get": {
+        "operationId": "PrivacyController_listConsents",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "privacy"
+        ]
+      }
+    },
+    "/privacy/me/export": {
+      "get": {
+        "operationId": "PrivacyController_exportMyData",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "privacy"
+        ]
+      }
+    },
+    "/privacy/requests": {
+      "post": {
+        "operationId": "PrivacyController_createRequest",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "privacy"
+        ]
+      },
+      "get": {
+        "operationId": "PrivacyController_listMyRequests",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "privacy"
+        ]
+      }
+    },
+    "/privacy/admin/requests": {
+      "get": {
+        "operationId": "PrivacyController_listRequests",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "privacy"
+        ]
+      }
+    },
+    "/privacy/admin/requests/{id}": {
+      "patch": {
+        "operationId": "PrivacyController_resolveRequest",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "privacy"
         ]
       }
     },
@@ -788,6 +2150,11 @@
         "scheme": "bearer",
         "bearerFormat": "JWT",
         "type": "http"
+      },
+      "cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "access_token"
       }
     },
     "schemas": {}

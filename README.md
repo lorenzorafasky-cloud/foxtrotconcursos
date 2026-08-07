@@ -72,12 +72,46 @@ No primeiro acesso real, o backend exige ativacao de 2FA TOTP. No ambiente seed,
 - Frontends: publique cada app Next separadamente, preferencialmente em Vercel.
 - Cloudflare: preencha `infra/cloudflare/terraform.tfvars` a partir de `variables.tf` e rode `terraform init && terraform apply`.
 
+Antes do lancamento, use `.env.production.example` como contrato de segredos e rode:
+
+```bash
+pnpm prod:check -- --env=.env.production
+```
+
+Checklist, operacao, seguranca, backups e LGPD estao documentados em:
+
+- [`docs/producao-checklist.md`](docs/producao-checklist.md)
+- [`docs/operacao-producao.md`](docs/operacao-producao.md)
+- [`docs/seguranca-pre-lancamento.md`](docs/seguranca-pre-lancamento.md)
+- [`docs/retencao-backups-lgpd.md`](docs/retencao-backups-lgpd.md)
+- [`docs/relatorio-aceite.md`](docs/relatorio-aceite.md)
+
 ## Decisoes arquiteturais
 
 - Entitlements ficam separados de usuarios para permitir assinatura ilimitada e compras avulsas simultaneas.
 - Pagamentos usam `PaymentProvider`, com adapter inicial Stripe e dominio independente para encaixe futuro do AurumPag.
 - Recursos futuros existem em schema/endpoints atras de feature flags desligadas por padrao.
 - Rankings sao gravados em Postgres para auditoria e espelhados em Redis Sorted Sets no worker para leitura em tempo real.
+
+## Plano de execucao
+
+A auditoria do estado atual e o plano por etapas ate a entrega final estao em [`docs/plano-execucao.md`](docs/plano-execucao.md).
+
+## Autenticacao e contas
+
+As decisoes e fluxos de cadastro, login, confirmacao de e-mail, reset de senha, 2FA, sessao e perfis estao em [`docs/autenticacao-contas.md`](docs/autenticacao-contas.md).
+
+## Area do aluno e cursos
+
+O fluxo de catalogo, matricula, modulos, aulas, progresso e avaliacao esta documentado em [`docs/area-aluno-cursos.md`](docs/area-aluno-cursos.md).
+
+## Aulas, videos e materiais
+
+O modulo de player autorizado, progresso de reproducao, materiais, downloads e duvidas por aula esta em [`docs/aulas-videos-materiais.md`](docs/aulas-videos-materiais.md).
+
+## IA e automacoes
+
+Busca inteligente, apoio ao estudo, geracao assistida, revisao humana, custos e automacoes estao em [`docs/ia-automacoes.md`](docs/ia-automacoes.md).
 
 ## Referencias usadas
 

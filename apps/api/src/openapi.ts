@@ -12,6 +12,7 @@ async function exportOpenApi() {
     .setDescription("Contrato REST da plataforma Foxtrot Concursos.")
     .setVersion("0.1.0")
     .addBearerAuth()
+    .addCookieAuth("access_token")
     .build();
   const document = SwaggerModule.createDocument(app, config);
   writeFileSync("openapi.json", JSON.stringify(document, null, 2));

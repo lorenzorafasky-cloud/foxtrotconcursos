@@ -1,20 +1,27 @@
 import argon2 from "argon2";
 import QRCode from "qrcode";
+import { createHash, randomBytes } from "node:crypto";
 import { authenticator } from "otplib";
 import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { PrismaService } from "../../core/prisma.service";
 import { LoginDto, OnboardingDto, RegisterDto } from "./auth.dto";
+import { MailerService } from "./mailer.service";
+
+const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly jwt: JwtService
+    private readonly jwt: JwtService,
+    private readonly mailer: MailerService
   ) {}
 
   async register(input: RegisterDto) {
     await this.verifyTurnstile(input.turnstileToken);
+    this.assertPasswordStrength(input.password);
     const exists = await this.prisma.user.findFirst({
       where: { OR: [{ email: input.email }, { nickname: input.nickname }] }
     });
@@ -32,9 +39,12 @@ export class AuthService {
     });
 
     const setup = await this.createTotpSetup(user.id);
+    const verification = await this.createEmailVerification(user.id, user.email);
     return {
       user: this.publicUser(user),
       twoFactorSetup: setup,
+      emailVerificationSent: true,
+      devVerificationUrl: verification.devUrl,
       rankingNotice: "Seu apelido aparecera no ranking publico; seu nome nunca e exibido a outros usuarios."
     };
   }
@@ -49,6 +59,13 @@ export class AuthService {
       throw new UnauthorizedException("Credenciais invalidas.");
     }
 
+    if (!user.emailVerifiedAt) {
+      return {
+        emailVerificationRequired: true,
+        message: "Confirme seu e-mail antes de entrar."
+      };
+    }
+
     if (user.twoFactorEnabled) {
       const validTotp = input.twoFactorCode && user.twoFactorSecret
         ? authenticator.check(input.twoFactorCode, user.twoFactorSecret)
@@ -60,6 +77,88 @@ export class AuthService {
     }
 
     return this.issueTokens(user.id);
+  }
+
+  async confirmEmail(rawToken: string) {
+    const token = await this.prisma.emailVerificationToken.findUnique({
+      where: { tokenHash: this.hashToken(rawToken) }
+    });
+    if (!token || token.usedAt || token.expiresAt < new Date()) {
+      throw new BadRequestException("Link de confirmacao invalido ou expirado.");
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.emailVerificationToken.update({
+        where: { id: token.id },
+        data: { usedAt: new Date() }
+      }),
+      this.prisma.user.update({
+        where: { id: token.userId },
+        data: { emailVerifiedAt: new Date() }
+      })
+    ]);
+
+    return { ok: true, message: "E-mail confirmado com sucesso." };
+  }
+
+  async resendEmailVerification(email: string, turnstileToken?: string) {
+    await this.verifyTurnstile(turnstileToken);
+    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (!user || user.emailVerifiedAt) {
+      return { ok: true, message: "Se houver uma conta pendente, enviaremos um novo link." };
+    }
+
+    const verification = await this.createEmailVerification(user.id, user.email);
+    return {
+      ok: true,
+      message: "Se houver uma conta pendente, enviaremos um novo link.",
+      devVerificationUrl: verification.devUrl
+    };
+  }
+
+  async requestPasswordReset(email: string, turnstileToken?: string) {
+    await this.verifyTurnstile(turnstileToken);
+    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (!user) {
+      return { ok: true, message: "Se o e-mail estiver cadastrado, enviaremos as instrucoes." };
+    }
+
+    const reset = await this.createPasswordReset(user.id, user.email);
+    return {
+      ok: true,
+      message: "Se o e-mail estiver cadastrado, enviaremos as instrucoes.",
+      devResetUrl: reset.devUrl
+    };
+  }
+
+  async resetPassword(rawToken: string, password: string) {
+    this.assertPasswordStrength(password);
+    const token = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash: this.hashToken(rawToken) }
+    });
+    if (!token || token.usedAt || token.expiresAt < new Date()) {
+      throw new BadRequestException("Link de redefinicao invalido ou expirado.");
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.passwordResetToken.update({
+        where: { id: token.id },
+        data: { usedAt: new Date() }
+      }),
+      this.prisma.user.update({
+        where: { id: token.userId },
+        data: {
+          passwordHash: await argon2.hash(this.withPepper(password)),
+          emailVerifiedAt: new Date()
+        }
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId: token.userId, revokedAt: null },
+        data: { revokedAt: new Date() }
+      })
+    ]);
+
+    return { ok: true, message: "Senha redefinida. Entre novamente." };
   }
 
   async refresh(rawRefreshToken?: string) {
@@ -147,7 +246,7 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      include: { roles: { include: { role: true } } }
+      include: { roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } }
     });
     return this.publicUser(user);
   }
@@ -157,6 +256,7 @@ export class AuthService {
       where: { id: userId },
       include: { roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } }
     });
+    if (!user.emailVerifiedAt) throw new UnauthorizedException("Confirme seu e-mail antes de entrar.");
     const roles = user.roles.map((item) => item.role.name);
     const permissions = [
       ...new Set(user.roles.flatMap((item) => item.role.permissions.map((rp) => rp.permission.key)))
@@ -195,14 +295,81 @@ export class AuthService {
     return `${password}${process.env.PASSWORD_PEPPER ?? ""}`;
   }
 
-  private publicUser(user: { id: string; email: string; fullName: string; nickname: string; twoFactorEnabled: boolean }) {
+  private publicUser(user: {
+    id: string;
+    email: string;
+    fullName: string;
+    nickname: string;
+    twoFactorEnabled: boolean;
+    emailVerifiedAt?: Date | null;
+    roles?: Array<{
+      role: {
+        name: string;
+        permissions?: Array<{ permission: { key: string } }>;
+      };
+    }>;
+  }) {
+    const roles = user.roles?.map((item) => item.role.name) ?? [];
+    const permissions = [
+      ...new Set(user.roles?.flatMap((item) => item.role.permissions?.map((rp) => rp.permission.key) ?? []) ?? [])
+    ];
+
     return {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
       nickname: user.nickname,
-      twoFactorEnabled: user.twoFactorEnabled
+      twoFactorEnabled: user.twoFactorEnabled,
+      emailVerified: Boolean(user.emailVerifiedAt),
+      roles,
+      permissions
     };
+  }
+
+  private async createEmailVerification(userId: string, email: string) {
+    const rawToken = this.createRawToken();
+    await this.prisma.emailVerificationToken.create({
+      data: {
+        userId,
+        tokenHash: this.hashToken(rawToken),
+        expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS)
+      }
+    });
+    const url = `${process.env.APP_URL ?? "http://localhost:3000"}/confirmar-email?token=${encodeURIComponent(rawToken)}`;
+    await this.mailer.sendEmailVerification(email, url);
+    return { devUrl: this.devOnlyUrl(url) };
+  }
+
+  private async createPasswordReset(userId: string, email: string) {
+    const rawToken = this.createRawToken();
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId,
+        tokenHash: this.hashToken(rawToken),
+        expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS)
+      }
+    });
+    const url = `${process.env.APP_URL ?? "http://localhost:3000"}/redefinir-senha?token=${encodeURIComponent(rawToken)}`;
+    await this.mailer.sendPasswordReset(email, url);
+    return { devUrl: this.devOnlyUrl(url) };
+  }
+
+  private createRawToken() {
+    return randomBytes(32).toString("base64url");
+  }
+
+  private hashToken(rawToken: string) {
+    return createHash("sha256").update(rawToken).digest("hex");
+  }
+
+  private devOnlyUrl(url: string) {
+    return process.env.NODE_ENV === "production" ? undefined : url;
+  }
+
+  private assertPasswordStrength(password: string) {
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+      throw new BadRequestException("A senha deve ter pelo menos 8 caracteres, com letras e numeros.");
+    }
   }
 
   private async verifyTurnstile(token?: string) {
