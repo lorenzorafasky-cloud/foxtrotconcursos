@@ -157,8 +157,9 @@ export function favoriteFlashcard(id: string, favorite: boolean) {
 }
 
 export function formatDuration(seconds: number) {
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds % 60;
+  const safeSeconds = Math.max(0, Math.floor(seconds || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const rest = safeSeconds % 60;
   if (minutes >= 60) {
     const hours = Math.floor(minutes / 60);
     const minuteRest = minutes % 60;
@@ -169,4 +170,72 @@ export function formatDuration(seconds: number) {
 
 export function dateInputValue(date = new Date()) {
   return date.toISOString().slice(0, 10);
+}
+
+export function priorityLabel(priority: TaskPriority) {
+  const labels: Record<TaskPriority, string> = {
+    LOW: "Baixa",
+    NORMAL: "Normal",
+    HIGH: "Alta",
+    STARRED: "Favorita"
+  };
+  return labels[priority];
+}
+
+export function summarizeTasks(lists: StudyList[], today = new Date()) {
+  const tasks = lists.flatMap((list) => list.tasks);
+  const todayValue = dateInputValue(today);
+  const completed = tasks.filter((task) => Boolean(task.completedAt)).length;
+  const openTasks = tasks.filter((task) => !task.completedAt);
+  const overdue = openTasks.filter((task) => Boolean(task.dueDate) && String(task.dueDate).slice(0, 10) < todayValue).length;
+  const dueToday = openTasks.filter((task) => String(task.dueDate ?? "").slice(0, 10) === todayValue).length;
+  const starred = tasks.filter((task) => task.priority === "STARRED").length;
+
+  return {
+    total: tasks.length,
+    completed,
+    open: openTasks.length,
+    overdue,
+    dueToday,
+    starred,
+    completionPercent: tasks.length ? Math.round((completed / tasks.length) * 100) : 0
+  };
+}
+
+export function summarizeGoals(goals: StudyGoal[]) {
+  const completed = goals.filter((goal) => Boolean(goal.completedAt)).length;
+  const averageProgress = goals.length
+    ? Math.round(goals.reduce((sum, goal) => sum + Math.min(100, Math.max(0, goal.progress?.percent ?? 0)), 0) / goals.length)
+    : 0;
+
+  return {
+    total: goals.length,
+    completed,
+    active: goals.length - completed,
+    averageProgress
+  };
+}
+
+export function consistencyPercent(consistency: Pick<Consistency, "days" | "activeDays">) {
+  return consistency.days.length ? Math.round((consistency.activeDays / consistency.days.length) * 100) : 0;
+}
+
+export function calendarDayLabel(date: string, today = new Date()) {
+  const value = date.slice(0, 10);
+  const todayValue = dateInputValue(today);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const tomorrowValue = dateInputValue(tomorrow);
+
+  if (value === todayValue) return "Hoje";
+  if (value === tomorrowValue) return "Amanha";
+  return value.split("-").reverse().join("/");
+}
+
+export function clampTimerSeconds(seconds: number, min = 0, max = 12 * 60 * 60) {
+  return Math.min(max, Math.max(min, Math.floor(seconds || 0)));
+}
+
+export function flashcardDueCount(cards: Flashcard[], now = new Date()) {
+  return cards.filter((card) => new Date(card.dueAt).getTime() <= now.getTime()).length;
 }

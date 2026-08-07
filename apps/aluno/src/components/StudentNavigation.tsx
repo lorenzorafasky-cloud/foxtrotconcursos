@@ -8,7 +8,7 @@ const navItems = [
   { href: "/", label: "Inicio", icon: Home },
   { href: "/cursos", label: "Cursos", icon: BookOpen },
   { href: "/questoes", label: "Questoes", icon: Target },
-  { href: "/planejamento", label: "Planejamento", icon: CalendarDays },
+  { href: "/planejamento", label: "Plano", ariaLabel: "Planejamento", icon: CalendarDays },
   { href: "/foco", label: "Foco", icon: Clock },
   { href: "/gamificacao", label: "Ranking", icon: Trophy },
   { href: "/ia", label: "IA", icon: Bot },
@@ -38,6 +38,7 @@ export function StudentNavigation({ activeHref = "/" }: { activeHref?: string })
                 )}
                 href={item.href}
                 key={item.href}
+                aria-label={item.ariaLabel ?? item.label}
               >
                 <Icon className="h-4 w-4" aria-hidden />
                 {item.label}
@@ -66,6 +67,7 @@ export function StudentNavigation({ activeHref = "/" }: { activeHref?: string })
                 )}
                 href={item.href}
                 key={item.href}
+                aria-label={item.ariaLabel ?? item.label}
               >
                 <Icon className="h-4 w-4" aria-hidden />
                 {item.label}

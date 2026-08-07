@@ -105,3 +105,35 @@ export function createGamificationStream(onEvent: (event: MessageEvent) => void)
   stream.addEventListener("xp", onEvent);
   return stream;
 }
+
+export function normalizeProgressPercent(value: number) {
+  return Math.min(100, Math.max(0, Math.round(value || 0)));
+}
+
+export function countUnreadNotifications(notifications: NotificationItem[]) {
+  return notifications.filter((notification) => !notification.readAt).length;
+}
+
+export function formatXpSource(source: string) {
+  const labels: Record<string, string> = {
+    FOCUS_SESSION: "Sessao de foco",
+    LESSON_COMPLETED: "Aula concluida",
+    QUESTION_CORRECT: "Questao correta",
+    FLASHCARD_REVIEWED: "Flashcard revisado",
+    CHALLENGE_COMPLETED: "Desafio concluido",
+    ACHIEVEMENT_UNLOCKED: "Conquista liberada"
+  };
+  return labels[source] ?? source.replace(/_/g, " ").toLowerCase();
+}
+
+export function achievementStatusLabel(achievement: Pick<Achievement, "unlocked" | "progress" | "requirement">) {
+  if (achievement.unlocked) return "Conquistada";
+  return `${achievement.progress}/${achievement.requirement.target}`;
+}
+
+export function challengeTimeLeftLabel(challenge: Pick<Challenge, "endsAt">, now = new Date()) {
+  const diff = new Date(challenge.endsAt).getTime() - now.getTime();
+  if (diff <= 0) return "Encerrado";
+  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+  return days === 1 ? "1 dia restante" : `${days} dias restantes`;
+}
