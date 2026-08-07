@@ -50,7 +50,7 @@ export const designTokens = {
     panel: "0 18px 50px rgb(0 0 0 / 0.28)"
   },
   typography: {
-    body: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-    display: ["Rajdhani", "Inter", "ui-sans-serif", "system-ui", "sans-serif"]
+    body: ["var(--font-body)", "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+    display: ["var(--font-display)", "Rajdhani", "Oswald", "Inter", "ui-sans-serif", "system-ui", "sans-serif"]
   }
 } as const;

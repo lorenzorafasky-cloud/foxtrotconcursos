@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import { LessonAssetType, QuestionKind } from "@foxtrot/database";
+import { MediaService } from "../src/modules/media/media.service";
 import { ProfessorService } from "../src/modules/professor/professor.service";
 
 const teacher = {
@@ -13,7 +14,7 @@ const teacher = {
 describe("ProfessorService", () => {
   it("blocks lesson creation outside the professor subject scope", async () => {
     const prisma = makePrismaMock({ professorSubject: null });
-    const service = new ProfessorService(prisma as never);
+    const service = new ProfessorService(prisma as never, new MediaService());
 
     await expect(
       service.createLesson(teacher, {
@@ -29,7 +30,7 @@ describe("ProfessorService", () => {
 
   it("creates material only after validating access to the lesson subject", async () => {
     const prisma = makePrismaMock({});
-    const service = new ProfessorService(prisma as never);
+    const service = new ProfessorService(prisma as never, new MediaService());
 
     await expect(
       service.createMaterial(teacher, {
@@ -46,7 +47,7 @@ describe("ProfessorService", () => {
 
   it("validates objective questions before creation", async () => {
     const prisma = makePrismaMock({});
-    const service = new ProfessorService(prisma as never);
+    const service = new ProfessorService(prisma as never, new MediaService());
 
     await expect(
       service.createQuestion(teacher, {
@@ -65,7 +66,7 @@ describe("ProfessorService", () => {
 
   it("creates a professor simulation from scoped questions", async () => {
     const prisma = makePrismaMock({ questions: [{ id: "question-1" }, { id: "question-2" }] });
-    const service = new ProfessorService(prisma as never);
+    const service = new ProfessorService(prisma as never, new MediaService());
 
     await expect(
       service.createSimulation(teacher, {
@@ -84,7 +85,7 @@ describe("ProfessorService", () => {
 
   it("grades essays inside the professor subject scope", async () => {
     const prisma = makePrismaMock({});
-    const service = new ProfessorService(prisma as never);
+    const service = new ProfessorService(prisma as never, new MediaService());
 
     await expect(service.gradeEssay(teacher, "essay-1", { finalScore: 8.5, finalFeedback: "Boa resposta." })).resolves.toMatchObject({
       id: "essay-1",

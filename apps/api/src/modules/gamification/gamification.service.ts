@@ -1,17 +1,26 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { ChallengeStatus, NotificationType, Prisma } from "@foxtrot/database";
 import { Observable, Subject } from "rxjs";
 import { PrismaService } from "../../core/prisma.service";
+import { GamificationGateway } from "./gamification.gateway";
 import { DEFAULT_ACHIEVEMENTS, XP_RULES, levelForXp, ruleForSource } from "./gamification.rules";
+import { LeaderboardPeriod, LeaderboardScope, LeaderboardService } from "./leaderboard.service";
 
 type StreamEvent = { type: string; data: string | object };
 type Requirement = { metric: string; target: number };
 
+const LEADERBOARD_BROADCAST_INTERVAL_MS = 5_000;
+
 @Injectable()
 export class GamificationService {
   private readonly streams = new Map<string, Subject<StreamEvent>>();
+  private readonly lastLeaderboardBroadcast = new Map<string, number>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly leaderboards: LeaderboardService,
+    @Optional() private readonly gateway?: GamificationGateway
+  ) {}
 
   rules() {
     return XP_RULES;
@@ -19,25 +28,31 @@ export class GamificationService {
 
   async dashboard(userId: string) {
     await this.ensureDefaultAchievements();
-    const [totalXp, recentXp, achievements, challenges, notifications, leaderboard] = await Promise.all([
+    const targetExam = await this.targetExam(userId);
+    const [totalXp, recentXp, achievements, challenges, notifications, leaderboard, contestLeaderboard] = await Promise.all([
       this.totalXp(userId),
       this.prisma.xpEvent.findMany({ where: { userId, revokedAt: null }, orderBy: { createdAt: "desc" }, take: 15 }),
       this.achievements(userId),
       this.challenges(userId),
       this.notifications(userId, false),
-      this.leaderboard("weekly")
+      this.leaderboard("weekly"),
+      targetExam ? this.leaderboard("weekly", { kind: "exam", examId: targetExam.id }) : Promise.resolve(null)
     ]);
     const level = levelForXp(totalXp);
     const rankingPosition = leaderboard.entries.find((entry) => entry.userId === userId)?.position ?? null;
+    const contestRankingPosition = contestLeaderboard?.entries.find((entry) => entry.userId === userId)?.position ?? null;
     return {
       totalXp,
       level,
       rankingPosition,
+      contestRankingPosition,
+      targetExam,
       recentXp,
       achievements,
       challenges,
       notifications,
       leaderboard,
+      contestLeaderboard,
       rules: XP_RULES
     };
   }
@@ -76,38 +91,27 @@ export class GamificationService {
     });
     this.emit(userId, "xp", event);
 
+    const targetExam = await this.targetExam(userId);
+    await this.leaderboards.recordXp(userId, awardedPoints, targetExam?.id ?? null);
+    void this.broadcastLeaderboards(targetExam?.id ?? null);
+
     if (!["achievement:reward", "challenge:reward"].includes(source)) {
       await Promise.all([this.evaluateAchievements(userId), this.evaluateChallenges(userId)]);
     }
     return { awarded: true, event, points: awardedPoints };
   }
 
-  async leaderboard(period: "daily" | "weekly" | "all" = "weekly") {
-    const since = periodStart(period);
-    const grouped = await this.prisma.xpEvent.groupBy({
-      by: ["userId"],
-      where: { revokedAt: null, ...(since ? { createdAt: { gte: since } } : {}) },
-      _sum: { points: true },
-      orderBy: { _sum: { points: "desc" } },
-      take: 50
-    });
-    const users = await this.prisma.user.findMany({
-      where: { id: { in: grouped.map((entry) => entry.userId) } },
-      select: { id: true, nickname: true, avatarUrl: true }
-    });
-    const entries = grouped.map((entry, index) => {
-      const xp = entry._sum.points ?? 0;
-      const user = users.find((candidate) => candidate.id === entry.userId);
-      return {
-        position: index + 1,
-        userId: entry.userId,
-        nickname: user?.nickname ?? "operador",
-        avatarUrl: user?.avatarUrl ?? null,
-        xp,
-        level: levelForXp(xp).level
-      };
-    });
-    return { period, entries, generatedAt: new Date() };
+  leaderboard(period: LeaderboardPeriod = "weekly", scope: LeaderboardScope = { kind: "global" }) {
+    return this.leaderboards.leaderboard(period, scope);
+  }
+
+  async leaderboardForUser(userId: string, period: LeaderboardPeriod = "weekly", scope: "global" | "contest" = "global") {
+    if (scope === "global") return this.leaderboard(period);
+    const targetExam = await this.targetExam(userId);
+    if (!targetExam) {
+      throw new BadRequestException("Defina um concurso de interesse no onboarding para ver a disputa por concurso-alvo.");
+    }
+    return this.leaderboard(period, { kind: "exam", examId: targetExam.id });
   }
 
   async achievements(userId: string) {
@@ -332,6 +336,34 @@ export class GamificationService {
     } as Record<string, number>;
   }
 
+  private async targetExam(userId: string) {
+    const profile = await this.prisma.onboardingProfile.findUnique({
+      where: { userId },
+      select: { targetExam: { select: { id: true, name: true } } }
+    });
+    return profile?.targetExam ?? null;
+  }
+
+  /** Broadcast throttled dos leaderboards afetados via Socket.io. */
+  private async broadcastLeaderboards(examId: string | null) {
+    if (!this.gateway) return;
+    const scopes: LeaderboardScope[] = [{ kind: "global" }];
+    if (examId) scopes.push({ kind: "exam", examId });
+    const now = Date.now();
+    for (const scope of scopes) {
+      const key = this.leaderboards.scopeKey(scope);
+      const last = this.lastLeaderboardBroadcast.get(key) ?? 0;
+      if (now - last < LEADERBOARD_BROADCAST_INTERVAL_MS) continue;
+      this.lastLeaderboardBroadcast.set(key, now);
+      try {
+        const leaderboard = await this.leaderboards.leaderboard("weekly", scope);
+        this.gateway.emitLeaderboard(key, leaderboard);
+      } catch {
+        // best-effort: tempo real nunca deve derrubar o fluxo de XP
+      }
+    }
+  }
+
   private subject(userId: string) {
     const existing = this.streams.get(userId);
     if (existing) return existing;
@@ -342,15 +374,8 @@ export class GamificationService {
 
   private emit(userId: string, type: string, data: string | object) {
     this.subject(userId).next({ type, data });
+    this.gateway?.emitToUser(userId, type, data);
   }
-}
-
-function periodStart(period: "daily" | "weekly" | "all") {
-  if (period === "all") return null;
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  if (period === "weekly") date.setDate(date.getDate() - 6);
-  return date;
 }
 
 function daysAgo(days: number) {

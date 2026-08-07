@@ -1,5 +1,5 @@
-import { createSign } from "node:crypto";
-import { Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { createHmac, createSign, timingSafeEqual } from "node:crypto";
+import { Injectable, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
 import { LessonAssetType } from "@foxtrot/database";
 
 type StreamTokenPayload = {
@@ -88,6 +88,92 @@ export class MediaService {
     if (r2Object) return { provider: "cloudflare-r2", bucket: r2Object.bucket, key: r2Object.key };
     if (url.startsWith("http://") || url.startsWith("https://")) return { provider: "public-url" };
     return { provider: "unknown" };
+  }
+
+  /**
+   * Cria um Direct Creator Upload no Cloudflare Stream (professor envia o
+   * arquivo direto para a Cloudflare, sem passar pela API).
+   */
+  async createDirectUpload(lessonId: string, creatorId: string, maxDurationSeconds = 4 * 60 * 60) {
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+    if (!accountId || !apiToken) {
+      throw new ServiceUnavailableException("Credenciais da API Cloudflare nao configuradas para upload de video.");
+    }
+
+    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/stream/direct_upload`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiToken}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        maxDurationSeconds,
+        requireSignedURLs: true,
+        creator: creatorId,
+        meta: { lessonId }
+      })
+    });
+    if (!response.ok) {
+      throw new ServiceUnavailableException("Cloudflare Stream recusou a criacao do upload.");
+    }
+    const payload = (await response.json()) as {
+      success: boolean;
+      result?: { uploadURL: string; uid: string };
+      errors?: Array<{ message: string }>;
+    };
+    if (!payload.success || !payload.result) {
+      throw new ServiceUnavailableException(payload.errors?.[0]?.message ?? "Falha ao criar upload no Cloudflare Stream.");
+    }
+    return {
+      lessonId,
+      videoUid: payload.result.uid,
+      uploadUrl: payload.result.uploadURL,
+      expiresInSeconds: 30 * 60
+    };
+  }
+
+  /**
+   * Valida a assinatura do webhook do Cloudflare Stream
+   * (header `Webhook-Signature: time=<unix>,sig1=<hmac-sha256-hex>`).
+   */
+  verifyStreamWebhook(rawBody: Buffer | string, signatureHeader?: string, toleranceSeconds = 300) {
+    const secret = process.env.CLOUDFLARE_STREAM_WEBHOOK_SECRET;
+    if (!secret) {
+      throw new ServiceUnavailableException("CLOUDFLARE_STREAM_WEBHOOK_SECRET nao configurado.");
+    }
+    if (!signatureHeader) throw new UnauthorizedException("Assinatura do webhook ausente.");
+
+    const parts = new Map(
+      signatureHeader.split(",").map((part) => {
+        const [key, ...rest] = part.trim().split("=");
+        return [key, rest.join("=")] as const;
+      })
+    );
+    const time = parts.get("time");
+    const signature = parts.get("sig1");
+    if (!time || !signature) throw new UnauthorizedException("Assinatura do webhook invalida.");
+
+    const age = Math.abs(Math.floor(Date.now() / 1000) - Number(time));
+    if (!Number.isFinite(age) || age > toleranceSeconds) {
+      throw new UnauthorizedException("Webhook expirado.");
+    }
+
+    const body = typeof rawBody === "string" ? rawBody : rawBody.toString("utf8");
+    const expected = createHmac("sha256", secret).update(`${time}.${body}`).digest("hex");
+    const expectedBuffer = Buffer.from(expected, "hex");
+    const receivedBuffer = Buffer.from(signature, "hex");
+    if (expectedBuffer.length !== receivedBuffer.length || !timingSafeEqual(expectedBuffer, receivedBuffer)) {
+      throw new UnauthorizedException("Assinatura do webhook nao confere.");
+    }
+    return true;
+  }
+
+  streamThumbnailUrl(videoUid: string) {
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    return accountId
+      ? `https://customer-${accountId}.cloudflarestream.com/${videoUid}/thumbnails/thumbnail.jpg`
+      : `https://videodelivery.net/${videoUid}/thumbnails/thumbnail.jpg`;
   }
 
   private isDownloadable(metadata: unknown) {

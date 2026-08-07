@@ -30,10 +30,15 @@ import { HealthController } from "./modules/health.controller";
 import { JwtAuthGuard } from "./security/jwt-auth.guard";
 import { ProfessorController } from "./modules/professor/professor.controller";
 import { ProfessorService } from "./modules/professor/professor.service";
+import { MediaController } from "./modules/media/media.controller";
 import { MediaService } from "./modules/media/media.service";
+import { QueueService } from "./core/queue.service";
 import { AuditInterceptor } from "./security/audit.interceptor";
 import { GamificationController } from "./modules/gamification/gamification.controller";
+import { GamificationGateway } from "./modules/gamification/gamification.gateway";
 import { GamificationService } from "./modules/gamification/gamification.service";
+import { LeaderboardService } from "./modules/gamification/leaderboard.service";
+import { RedisService } from "./core/redis.service";
 import { PrivacyController } from "./modules/privacy/privacy.controller";
 import { PrivacyService } from "./modules/privacy/privacy.service";
 
@@ -58,6 +63,7 @@ import { PrivacyService } from "./modules/privacy/privacy.service";
     PaymentsController,
     AdminController,
     ProfessorController,
+    MediaController,
     GamificationController,
     AiController,
     PrivacyController,
@@ -77,6 +83,10 @@ import { PrivacyService } from "./modules/privacy/privacy.service";
     AdminService,
     ProfessorService,
     MediaService,
+    QueueService,
+    RedisService,
+    LeaderboardService,
+    GamificationGateway,
     GamificationService,
     PrivacyService,
     SecureLogger,

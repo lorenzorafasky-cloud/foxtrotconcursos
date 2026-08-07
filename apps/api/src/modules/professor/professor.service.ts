@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { CourseStatus, LessonAssetType, Prisma, QuestionKind } from "@foxtrot/database";
 import { PrismaService } from "../../core/prisma.service";
 import { AuthUser } from "../../security/auth-user.decorator";
+import { MediaService } from "../media/media.service";
 
 type CourseInput = {
   title: string;
@@ -72,7 +73,10 @@ type SimulationInput = {
 
 @Injectable()
 export class ProfessorService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly media: MediaService
+  ) {}
 
   async dashboard(actor: AuthUser) {
     const subjectIds = await this.scopedSubjectIds(actor);
@@ -258,6 +262,40 @@ export class ProfessorService {
       where: { id: lessonId },
       data: { publishedAt: new Date() }
     });
+  }
+
+  /**
+   * Inicia o fluxo real de upload de video: gera um Direct Creator Upload no
+   * Cloudflare Stream e associa o uid a aula. A transcodificacao dispara o
+   * webhook `media/webhooks/stream`, que enfileira transcricao e resumo.
+   */
+  async createVideoUpload(actor: AuthUser, lessonId: string) {
+    await this.assertLessonAccess(actor, lessonId);
+    const upload = await this.media.createDirectUpload(lessonId, actor.id);
+    await this.prisma.lesson.update({
+      where: { id: lessonId },
+      data: { streamVideoUid: upload.videoUid }
+    });
+    const existing = await this.prisma.lessonAsset.findFirst({
+      where: { lessonId, type: LessonAssetType.VIDEO }
+    });
+    const metadata = {
+      status: "uploading",
+      videoUid: upload.videoUid,
+      requestedBy: actor.id,
+      requestedAt: new Date().toISOString()
+    };
+    if (existing) {
+      await this.prisma.lessonAsset.update({
+        where: { id: existing.id },
+        data: { url: `stream://${upload.videoUid}`, metadata }
+      });
+    } else {
+      await this.prisma.lessonAsset.create({
+        data: { lessonId, type: LessonAssetType.VIDEO, url: `stream://${upload.videoUid}`, metadata }
+      });
+    }
+    return upload;
   }
 
   async createMaterial(actor: AuthUser, data: MaterialInput) {

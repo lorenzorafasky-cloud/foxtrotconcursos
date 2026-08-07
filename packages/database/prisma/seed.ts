@@ -84,18 +84,21 @@ async function seedRoles() {
   }
 }
 
-async function createUser(email: string, roleName: RoleName, fullName: string, nickname: string) {
-  const passwordHash = await argon2.hash("Foxtrot@123");
+async function createUser(email: string, roleName: RoleName, fullName: string, nickname: string, options?: { twoFactorSecret?: string }) {
+  // O login concatena PASSWORD_PEPPER a senha antes do argon2 — o seed precisa
+  // hashear da mesma forma, senao as credenciais de exemplo nao funcionam.
+  const passwordHash = await argon2.hash(`Foxtrot@123${process.env.PASSWORD_PEPPER ?? ""}`);
   const user = await prisma.user.upsert({
     where: { email },
-    update: {},
+    update: { passwordHash },
     create: {
       email,
       fullName,
       nickname,
       emailVerifiedAt: new Date(),
       passwordHash,
-      twoFactorEnabled: false
+      twoFactorEnabled: Boolean(options?.twoFactorSecret),
+      twoFactorSecret: options?.twoFactorSecret
     }
   });
 
@@ -422,6 +425,12 @@ async function main() {
   await createUser("professor@foxtrot.local", "PROFESSOR", "Professor Operacional", "instrutor");
   const student = await createUser("aluno@foxtrot.local", "ALUNO_ILIMITADO", "Aluno Foxtrot", "recruta01");
 
+  // Usuario dedicado aos testes E2E autenticados (Playwright): 2FA habilitado
+  // com segredo TOTP deterministico (sobrescrevivel via E2E_TOTP_SECRET).
+  const e2eStudent = await createUser("e2e-aluno@foxtrot.local", "ALUNO_ILIMITADO", "Aluno E2E", "e2e-operador", {
+    twoFactorSecret: process.env.E2E_TOTP_SECRET ?? "JBSWY3DPEHPK3PXP"
+  });
+
   const { course } = await seedCatalog();
   await seedGamification();
   await seedBilling(course.id);
@@ -436,6 +445,36 @@ async function main() {
       source: "seed"
     }
   });
+
+  await prisma.entitlement.upsert({
+    where: { id: "seed-entitlement-e2e" },
+    update: {},
+    create: {
+      id: "seed-entitlement-e2e",
+      userId: e2eStudent.id,
+      type: "UNLIMITED",
+      source: "seed-e2e"
+    }
+  });
+
+  const targetExam = await prisma.exam.findFirst({ where: { name: "PF Agente 2027" } });
+  if (targetExam) {
+    await prisma.onboardingProfile.upsert({
+      where: { userId: e2eStudent.id },
+      update: { targetExamId: targetExam.id },
+      create: {
+        userId: e2eStudent.id,
+        age: 27,
+        studyExperience: "1-2 anos",
+        careerGoal: "Policia Federal",
+        targetExamId: targetExam.id,
+        platformGoals: ["aprovacao-rapida"],
+        dailyNetStudyGoalMins: 180,
+        examDate: targetExam.examDate
+      }
+    });
+    await prisma.user.update({ where: { id: e2eStudent.id }, data: { onboardingComplete: true } });
+  }
 
   await prisma.payment.create({
     data: {

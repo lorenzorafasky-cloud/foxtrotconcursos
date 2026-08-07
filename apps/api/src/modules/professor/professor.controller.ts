@@ -122,6 +122,13 @@ export class ProfessorController {
   }
 
   @RequirePermissions("teacher:publish-lessons")
+  @AuditAction("professor.lesson.video-upload")
+  @Post("lessons/:id/video-upload")
+  createVideoUpload(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.professor.createVideoUpload(user, id);
+  }
+
+  @RequirePermissions("teacher:publish-lessons")
   @AuditAction("professor.material.create")
   @Post("materials")
   createMaterial(

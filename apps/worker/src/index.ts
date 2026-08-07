@@ -1,6 +1,6 @@
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
-import { ChallengeStatus, LessonAssetType, NotificationType, PrismaClient } from "@foxtrot/database";
+import { ChallengeStatus, LessonAssetType, NotificationType, Prisma, PrismaClient } from "@foxtrot/database";
 
 const connection = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", {
   maxRetriesPerRequest: null
@@ -11,6 +11,7 @@ const aiDb = prisma as unknown as {
     findMany: (args: unknown) => Promise<Array<{ id: string }>>;
     findUnique: (args: unknown) => Promise<{ id: string; userId: string; type: string; input: unknown; status: string } | null>;
     update: (args: unknown) => Promise<unknown>;
+    create: (args: unknown) => Promise<{ id: string }>;
   };
   aiReviewItem: { create: (args: unknown) => Promise<{ id: string }> };
   aiUsageEvent: { create: (args: unknown) => Promise<unknown> };
@@ -43,6 +44,10 @@ new Worker(
         }
       });
     }
+    if (job.name === "transcribe") {
+      const { lessonId, videoUid } = job.data as { lessonId: string; videoUid: string };
+      await transcribeLesson(lessonId, videoUid);
+    }
   },
   { connection }
 );
@@ -74,6 +79,8 @@ new Worker(
           }))
         }
       });
+      // Reidrata os Sorted Sets do Redis (fonte primaria dos leaderboards em tempo real).
+      await hydrateLeaderboardZset("global", period, grouped.map((entry) => ({ userId: entry.userId, xp: entry._sum.points ?? 0 })));
     }
   },
   { connection }
@@ -216,4 +223,135 @@ async function callAnthropic(prompt: string) {
 function transcriptFromAssets(assets: Array<{ type: LessonAssetType; metadata: unknown }>) {
   const transcript = assets.find((asset) => asset.type === LessonAssetType.TRANSCRIPT && asset.metadata && typeof asset.metadata === "object" && "body" in asset.metadata);
   return transcript?.metadata && typeof transcript.metadata === "object" && "body" in transcript.metadata ? String(transcript.metadata.body) : "";
+}
+
+/**
+ * Reidrata um leaderboard em Redis Sorted Set (mesma convencao de chaves do
+ * LeaderboardService da API): lb:{scope}:{d:{dia}|w:{segunda}|all}.
+ */
+async function hydrateLeaderboardZset(scope: string, period: "daily" | "weekly" | "all", entries: Array<{ userId: string; xp: number }>) {
+  if (!entries.length) return;
+  const key = leaderboardKey(scope, period);
+  const pipeline = connection.pipeline();
+  pipeline.del(key);
+  pipeline.zadd(key, ...entries.flatMap((entry) => [entry.xp, entry.userId]));
+  if (period === "daily") pipeline.expire(key, 3 * 24 * 60 * 60);
+  if (period === "weekly") pipeline.expire(key, 15 * 24 * 60 * 60);
+  await pipeline.exec();
+}
+
+function leaderboardKey(scope: string, period: "daily" | "weekly" | "all", reference = new Date()) {
+  if (period === "all") return `lb:${scope}:all`;
+  if (period === "daily") return `lb:${scope}:d:${reference.toISOString().slice(0, 10)}`;
+  const monday = new Date(reference);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  return `lb:${scope}:w:${monday.toISOString().slice(0, 10)}`;
+}
+
+/**
+ * Transcricao real da videoaula (Secao 7 do Prompt Mestre):
+ * Stream download -> Workers AI (Whisper) -> asset TRANSCRIPT ->
+ * job de resumo por IA com revisao humana.
+ */
+async function transcribeLesson(lessonId: string, videoUid: string) {
+  const lesson = await prisma.lesson.findUnique({ where: { id: lessonId }, include: { assets: true } });
+  if (!lesson) throw new Error("Aula nao encontrada para transcricao.");
+
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+  if (!accountId || !apiToken) {
+    await upsertLessonAssetMetadata(lessonId, LessonAssetType.VIDEO, { transcription: "pending-credentials" });
+    console.warn(`Transcricao adiada para aula ${lessonId}: credenciais Cloudflare ausentes.`);
+    return;
+  }
+
+  const downloadUrl = await ensureStreamDownload(accountId, apiToken, videoUid);
+  const media = await fetch(downloadUrl);
+  if (!media.ok) throw new Error(`Falha ao baixar video ${videoUid} para transcricao.`);
+  const audioBuffer = Buffer.from(await media.arrayBuffer());
+
+  const aiResponse = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/openai/whisper-large-v3-turbo`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ audio: audioBuffer.toString("base64"), language: "pt" })
+    }
+  );
+  if (!aiResponse.ok) throw new Error(`Workers AI recusou a transcricao do video ${videoUid}.`);
+  const aiPayload = (await aiResponse.json()) as {
+    success?: boolean;
+    result?: { text?: string; segments?: Array<{ start: number; end: number; text: string }> };
+  };
+  const text = aiPayload.result?.text?.trim();
+  if (!text) throw new Error(`Transcricao vazia para o video ${videoUid}.`);
+
+  const existing = lesson.assets.find((asset) => asset.type === LessonAssetType.TRANSCRIPT);
+  const metadata = {
+    body: text,
+    segments: aiPayload.result?.segments ?? [],
+    source: "cloudflare-workers-ai/whisper-large-v3-turbo",
+    videoUid,
+    transcribedAt: new Date().toISOString()
+  };
+  if (existing) {
+    await prisma.lessonAsset.update({ where: { id: existing.id }, data: { metadata } });
+  } else {
+    await prisma.lessonAsset.create({
+      data: { lessonId, type: LessonAssetType.TRANSCRIPT, url: `inline://transcripts/${lessonId}`, metadata }
+    });
+  }
+
+  const ownerId = lesson.teacherId ?? (await firstAdminId());
+  if (ownerId) {
+    const summaryJob = await aiDb.aiAutomationJob.create({
+      data: {
+        userId: ownerId,
+        type: "lesson.summary",
+        status: "PENDING",
+        input: { lessonId, transcript: text, saveAssets: true }
+      }
+    });
+    await aiQueue.add("process-job", { jobId: summaryJob.id });
+  }
+}
+
+async function ensureStreamDownload(accountId: string, apiToken: string, videoUid: string) {
+  const base = `https://api.cloudflare.com/client/v4/accounts/${accountId}/stream/${videoUid}/downloads`;
+  const headers = { authorization: `Bearer ${apiToken}`, "content-type": "application/json" };
+  const created = await fetch(base, { method: "POST", headers });
+  if (!created.ok && created.status !== 409) {
+    throw new Error(`Falha ao habilitar download do video ${videoUid}.`);
+  }
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const status = await fetch(base, { headers });
+    if (status.ok) {
+      const payload = (await status.json()) as {
+        result?: { default?: { url?: string; status?: string; percentComplete?: number } };
+      };
+      const item = payload.result?.default;
+      if (item?.url && (item.status === "ready" || item.percentComplete === 100)) return item.url;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
+  }
+  throw new Error(`Download do video ${videoUid} nao ficou pronto a tempo.`);
+}
+
+async function firstAdminId() {
+  const admin = await prisma.user.findFirst({
+    where: { roles: { some: { role: { name: "ADMIN_MASTER" } } } },
+    select: { id: true }
+  });
+  return admin?.id ?? null;
+}
+
+async function upsertLessonAssetMetadata(lessonId: string, type: LessonAssetType, patch: Record<string, unknown>) {
+  const asset = await prisma.lessonAsset.findFirst({ where: { lessonId, type } });
+  if (!asset) return;
+  const current = asset.metadata && typeof asset.metadata === "object" ? (asset.metadata as Record<string, unknown>) : {};
+  await prisma.lessonAsset.update({
+    where: { id: asset.id },
+    data: { metadata: { ...current, ...patch } as Prisma.InputJsonValue }
+  });
 }
