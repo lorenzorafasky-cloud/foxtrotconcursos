@@ -7,6 +7,7 @@ const professorUrl = process.env.E2E_PROFESSOR_URL ?? "http://localhost:3102";
 test.describe("aceite do aluno", () => {
   test("navega pelas areas principais do aluno", async ({ page }) => {
     await assertPage(page, `${alunoUrl}/`, "Foxtrot Concursos");
+    await assertPage(page, `${alunoUrl}/cursos`, "Cursos publicados");
     await assertPage(page, `${alunoUrl}/questoes`, "Banco de questoes");
     await assertPage(page, `${alunoUrl}/foco`, "Area Foco");
     await assertPage(page, `${alunoUrl}/planejamento`, "Planejamento");

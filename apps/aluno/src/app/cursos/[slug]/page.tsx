@@ -1,13 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { BookOpen, CheckCircle2, Clock, Loader2, Lock, PlayCircle, ShieldAlert } from "lucide-react";
-import { BrandMark, Button } from "@foxtrot/ui";
-import { apiRequest } from "../../../lib/api";
-import { CourseDetail, courseStatusLabel, formatMinutes } from "../../../lib/courses";
+import { Badge, Button, EmptyState, ErrorState, LoadingState, StatCard, useAuthSession } from "@foxtrot/ui";
+import { CourseModules } from "../../../components/CourseModules";
+import { StudentNavigation } from "../../../components/StudentNavigation";
+import { fallbackCover } from "../../../components/CourseCard";
+import {
+  CourseDetail,
+  courseStatusLabel,
+  enrollInCourse,
+  fetchCourseDetail,
+  findNextLesson,
+  formatMinutes,
+  progressLabel
+} from "../../../lib/courses";
 
 export default function CourseDetailPage({ params }: { params: { slug: string } }) {
+  const session = useAuthSession();
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
@@ -22,7 +33,7 @@ export default function CourseDetailPage({ params }: { params: { slug: string } 
     setLoading(true);
     setError("");
     try {
-      setCourse(await apiRequest<CourseDetail>(`/courses/${params.slug}`));
+      setCourse(await fetchCourseDetail(params.slug));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nao foi possivel carregar o curso.");
     } finally {
@@ -35,8 +46,8 @@ export default function CourseDetailPage({ params }: { params: { slug: string } 
     setEnrolling(true);
     setNotice("");
     try {
-      await apiRequest(`/courses/${course.slug}/enroll`, { method: "POST", body: "{}" });
-      setNotice("Matricula ativa. As aulas ja estao liberadas.");
+      await enrollInCourse(course.slug);
+      setNotice("Matricula ativa. As aulas publicadas ja estao liberadas.");
       await load();
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Nao foi possivel concluir a matricula.");
@@ -45,104 +56,123 @@ export default function CourseDetailPage({ params }: { params: { slug: string } 
     }
   }
 
+  const nextLesson = useMemo(() => (course ? findNextLesson(course) : null), [course]);
+  const canOpenLessons = Boolean(course?.allowed && course.enrolled);
+
   return (
     <main className="min-h-screen bg-zinc-950">
-      <header className="border-b border-zinc-800 px-4 py-4">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <BrandMark />
-          <Link className="text-sm font-semibold text-foxtrot-400" href="/">Catalogo</Link>
-        </div>
-      </header>
+      <StudentNavigation activeHref="/cursos" />
+
       {loading && (
-        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 lg:grid-cols-[1fr_360px]">
-          <div className="h-96 animate-pulse rounded-md border border-zinc-800 bg-zinc-900" />
-          <div className="h-64 animate-pulse rounded-md border border-zinc-800 bg-zinc-900" />
+        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <LoadingState label="Carregando curso..." />
+          <div className="h-64 animate-pulse rounded-md border border-zinc-800 bg-zinc-900" aria-hidden />
         </div>
       )}
+
       {!loading && error && (
         <section className="mx-auto max-w-3xl px-4 py-16">
-          <div className="rounded-md border border-red-900 bg-red-950/40 p-5 text-red-100">
-            <ShieldAlert className="mb-3 h-5 w-5" />
-            <p>{error}</p>
-            <Link className="mt-4 inline-flex text-sm font-semibold text-foxtrot-400" href="/login">Entrar para acessar detalhes</Link>
-          </div>
+          <ErrorState
+            title="Curso indisponivel"
+            description={error}
+            action={
+              error.toLowerCase().includes("sessao") || error.toLowerCase().includes("entre") || session.status !== "authenticated" ? (
+                <Link className="inline-flex h-10 items-center justify-center rounded-md bg-foxtrot-500 px-4 text-sm font-semibold text-white hover:bg-foxtrot-600" href={`/login?next=/cursos/${params.slug}`}>
+                  Entrar para acessar detalhes
+                </Link>
+              ) : (
+                <Button onClick={load} type="button" variant="outline">Tentar novamente</Button>
+              )
+            }
+          />
         </section>
       )}
+
       {!loading && course && (
         <>
           <section className="relative overflow-hidden border-b border-zinc-800">
-            <img alt={course.title} className="absolute inset-0 h-full w-full object-cover opacity-20" src={course.coverImageUrl ?? "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1600&auto=format&fit=crop"} />
-            <div className="relative mx-auto max-w-7xl px-4 py-10">
-              <div className="max-w-3xl">
-                <div className="flex flex-wrap gap-2 text-xs uppercase text-zinc-400">
-                  <span>{courseStatusLabel(course.status)}</span>
-                  <span>{course.career.name}</span>
-                  {course.board && <span>{course.board.name}</span>}
+            <img alt={course.title} className="absolute inset-0 h-full w-full object-cover opacity-22" src={course.coverImageUrl ?? fallbackCover} />
+            <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-zinc-950/90 to-zinc-950/70" />
+            <div className="relative mx-auto grid max-w-7xl gap-8 px-4 py-10 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone="brand">{courseStatusLabel(course.status)}</Badge>
+                  <Badge>{course.career.name}</Badge>
+                  {course.board && <Badge tone="info">{course.board.name}</Badge>}
+                  <Badge tone={course.enrolled ? "success" : course.allowed ? "warning" : "danger"}>
+                    {course.enrolled ? "Matriculado" : course.allowed ? "Acesso autorizado" : "Acesso bloqueado"}
+                  </Badge>
                 </div>
                 <h1 className="mt-4 font-display text-4xl font-black uppercase leading-tight text-white md:text-5xl">{course.title}</h1>
-                <p className="mt-4 text-zinc-300">{course.description}</p>
+                <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-300">{course.description}</p>
                 <div className="mt-6 flex flex-wrap gap-3">
                   {course.allowed ? (
                     <Button type="button" onClick={enroll} disabled={enrolling || course.enrolled}>
-                      {enrolling ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                      {enrolling ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />}
                       {course.enrolled ? "Matriculado" : "Matricular"}
                     </Button>
                   ) : (
-                    <Button type="button" disabled><Lock className="h-4 w-4" /> Acesso nao liberado</Button>
+                    <Button type="button" disabled>
+                      <Lock className="h-4 w-4" aria-hidden /> Acesso nao liberado
+                    </Button>
                   )}
-                  <Link className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-transparent px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-800" href="/conta">Minha conta</Link>
+                  {canOpenLessons && nextLesson && (
+                    <Link className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-zinc-700 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-900" href={`/aulas/${nextLesson.id}`}>
+                      <PlayCircle className="h-4 w-4" aria-hidden /> Ir para primeira aula
+                    </Link>
+                  )}
+                  {!course.allowed && (
+                    <Link className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-zinc-700 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-900" href="/assinaturas">
+                      Ver planos
+                    </Link>
+                  )}
                 </div>
-                {notice && <p className="mt-4 text-sm text-zinc-300">{notice}</p>}
+                {notice && (
+                  <div className="mt-4 rounded-md border border-zinc-800 bg-zinc-950/80 p-3 text-sm text-zinc-300" role="status">
+                    {notice}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                <StatCard icon={<BookOpen className="h-4 w-4" />} label="Modulos" value={String(course.stats.moduleCount)} />
+                <StatCard icon={<PlayCircle className="h-4 w-4" />} label="Aulas" value={String(course.stats.lessonCount)} tone="blue" />
+                <StatCard icon={<Clock className="h-4 w-4" />} label="Carga" value={formatMinutes(course.stats.workloadSeconds || course.workloadMinutes * 60)} tone="zinc" />
               </div>
             </div>
           </section>
-          <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 lg:grid-cols-[1fr_340px]">
-            <section className="grid gap-4">
-              {course.modules.map((module) => (
-                <article key={module.id} className="rounded-md border border-zinc-800 bg-zinc-950 p-5">
-                  <h2 className="font-display text-2xl font-bold uppercase text-white">{module.position}. {module.title}</h2>
-                  <div className="mt-4 grid gap-3">
-                    {module.lessons.map((lesson) => (
-                      <Link
-                        key={lesson.id}
-                        href={course.allowed && course.enrolled ? `/aulas/${lesson.id}` : "#"}
-                        className="grid gap-3 rounded border border-zinc-800 p-3 text-sm hover:border-foxtrot-500 md:grid-cols-[1fr_auto]"
-                        onClick={(event) => {
-                          if (!course.allowed || !course.enrolled) event.preventDefault();
-                        }}
-                      >
-                        <span className="flex items-center gap-3">
-                          {course.allowed && course.enrolled ? <PlayCircle className="h-5 w-5 text-foxtrot-400" /> : <Lock className="h-5 w-5 text-zinc-600" />}
-                          <span>
-                            <strong className="block text-white">{lesson.title}</strong>
-                            <span className="text-zinc-500">{lesson.description}</span>
-                          </span>
-                        </span>
-                        <span className="inline-flex items-center gap-2 text-zinc-400"><Clock className="h-4 w-4" /> {formatMinutes(lesson.durationSeconds)}</span>
-                      </Link>
-                    ))}
-                  </div>
-                </article>
-              ))}
-            </section>
+
+          <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+            {course.stats.lessonCount > 0 ? <CourseModules course={course} /> : <EmptyState title="Curso sem aulas publicadas" description="A estrutura aparecera aqui assim que os modulos forem publicados." />}
+
             <aside className="grid content-start gap-4">
               <section className="rounded-md border border-zinc-800 bg-zinc-950 p-5">
                 <h2 className="font-display text-xl font-bold uppercase text-white">Progresso</h2>
-                <div className="mt-4 h-2 rounded bg-zinc-800">
+                <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
+                  <span>{progressLabel(course.stats.progressPercent)}</span>
+                  <span>{course.stats.progressPercent}%</span>
+                </div>
+                <div className="mt-2 h-2 rounded bg-zinc-800" aria-hidden>
                   <div className="h-2 rounded bg-foxtrot-500" style={{ width: `${course.stats.progressPercent}%` }} />
                 </div>
                 <div className="mt-4 grid gap-2 text-sm text-zinc-300">
-                  <span>{course.stats.progressPercent}% concluido</span>
                   <span>{course.stats.completedLessons}/{course.stats.lessonCount} aulas concluidas</span>
                   <span>{formatMinutes(course.stats.watchedSeconds)} assistidos</span>
+                  <span>{course.enrolled ? "Matricula sincronizada" : "Matricula pendente"}</span>
                 </div>
               </section>
+
               <section className="rounded-md border border-zinc-800 bg-zinc-950 p-5">
-                <h2 className="font-display text-xl font-bold uppercase text-white">Estrutura</h2>
-                <div className="mt-4 grid gap-2 text-sm text-zinc-300">
-                  <span className="rounded bg-zinc-900 p-3"><BookOpen className="mr-2 inline h-4 w-4 text-foxtrot-400" /> {course.stats.moduleCount} modulos</span>
-                  <span className="rounded bg-zinc-900 p-3"><PlayCircle className="mr-2 inline h-4 w-4 text-foxtrot-400" /> {course.stats.lessonCount} aulas</span>
-                  <span className="rounded bg-zinc-900 p-3"><Clock className="mr-2 inline h-4 w-4 text-foxtrot-400" /> {formatMinutes(course.workloadMinutes * 60)} de carga</span>
+                <h2 className="font-display text-xl font-bold uppercase text-white">Acesso</h2>
+                <div className="mt-4 grid gap-3 text-sm text-zinc-300">
+                  <span className="rounded bg-zinc-900 p-3">
+                    {course.allowed ? <CheckCircle2 className="mr-2 inline h-4 w-4 text-green-300" aria-hidden /> : <ShieldAlert className="mr-2 inline h-4 w-4 text-red-300" aria-hidden />}
+                    {course.allowed ? "Seu perfil tem permissao para este curso." : "Seu perfil ainda nao possui permissao para este curso."}
+                  </span>
+                  <span className="rounded bg-zinc-900 p-3">
+                    {course.enrolled ? <CheckCircle2 className="mr-2 inline h-4 w-4 text-green-300" aria-hidden /> : <Lock className="mr-2 inline h-4 w-4 text-zinc-500" aria-hidden />}
+                    {course.enrolled ? "Matricula registrada." : "Clique em matricular quando o acesso estiver liberado."}
+                  </span>
                 </div>
               </section>
             </aside>
