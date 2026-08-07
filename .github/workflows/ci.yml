@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: ["master", "main"]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @foxtrot/database db:generate
+      - run: pnpm --filter @foxtrot/api test
+      - run: pnpm --filter @foxtrot/api lint
+      - run: pnpm --filter @foxtrot/worker lint
+      - run: pnpm --filter @foxtrot/aluno build
+      - run: pnpm --filter @foxtrot/admin build
+      - run: pnpm --filter @foxtrot/professor build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e
+        env:
+          E2E_BASE_URL: http://localhost:3000

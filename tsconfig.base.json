@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@foxtrot/database": ["packages/database/src/index.ts"],
+      "@foxtrot/shared-types": ["packages/shared-types/src/index.ts"],
+      "@foxtrot/ui": ["packages/ui/src/index.tsx"]
+    }
+  }
+}

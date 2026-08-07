@@ -1,0 +1,795 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "HealthController_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/2fa/setup": {
+      "post": {
+        "operationId": "AuthController_setupTotp",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/2fa/verify": {
+      "post": {
+        "operationId": "AuthController_verifyTotp",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/onboarding": {
+      "post": {
+        "operationId": "AuthController_onboarding",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/courses": {
+      "get": {
+        "operationId": "CoursesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "courses"
+        ]
+      }
+    },
+    "/courses/{slug}": {
+      "get": {
+        "operationId": "CoursesController_detail",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "courses"
+        ]
+      }
+    },
+    "/lessons/{id}": {
+      "get": {
+        "operationId": "CoursesController_lesson",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "courses"
+        ]
+      }
+    },
+    "/lessons/{id}/progress": {
+      "patch": {
+        "operationId": "CoursesController_progress",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "courses"
+        ]
+      }
+    },
+    "/lessons/{id}/ratings": {
+      "post": {
+        "operationId": "CoursesController_rate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "courses"
+        ]
+      }
+    },
+    "/lessons/{id}/doubts": {
+      "post": {
+        "operationId": "CoursesController_doubt",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "courses"
+        ]
+      }
+    },
+    "/lesson-doubts/{id}/answer": {
+      "post": {
+        "operationId": "CoursesController_answerDoubt",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "courses"
+        ]
+      }
+    },
+    "/questions/filters": {
+      "get": {
+        "operationId": "QuestionsController_filters",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions": {
+      "get": {
+        "operationId": "QuestionsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/performance": {
+      "get": {
+        "operationId": "QuestionsController_performance",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/notes": {
+      "get": {
+        "operationId": "QuestionsController_notes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      },
+      "post": {
+        "operationId": "QuestionsController_createNote",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/{id}": {
+      "get": {
+        "operationId": "QuestionsController_detail",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/{id}/attempts": {
+      "post": {
+        "operationId": "QuestionsController_attempt",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/{id}/reactions": {
+      "post": {
+        "operationId": "QuestionsController_reaction",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/{id}/answers": {
+      "post": {
+        "operationId": "QuestionsController_answer",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/{id}/ai-answer": {
+      "post": {
+        "operationId": "QuestionsController_aiAnswer",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/planner/lists": {
+      "get": {
+        "operationId": "PlannerController_lists",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "planner"
+        ]
+      },
+      "post": {
+        "operationId": "PlannerController_createList",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "planner"
+        ]
+      }
+    },
+    "/planner/lists/{id}/tasks": {
+      "post": {
+        "operationId": "PlannerController_createTask",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "planner"
+        ]
+      }
+    },
+    "/planner/tasks/{id}/complete": {
+      "patch": {
+        "operationId": "PlannerController_complete",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "planner"
+        ]
+      }
+    },
+    "/focus/dashboard": {
+      "get": {
+        "operationId": "FocusController_dashboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "focus"
+        ]
+      }
+    },
+    "/focus/sessions": {
+      "post": {
+        "operationId": "FocusController_session",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "focus"
+        ]
+      }
+    },
+    "/focus/leaderboard": {
+      "get": {
+        "operationId": "FocusController_leaderboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "focus"
+        ]
+      }
+    },
+    "/focus/flashcards": {
+      "get": {
+        "operationId": "FocusController_flashcards",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "focus"
+        ]
+      },
+      "post": {
+        "operationId": "FocusController_createFlashcard",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "focus"
+        ]
+      }
+    },
+    "/focus/post-its": {
+      "get": {
+        "operationId": "FocusController_postIts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "focus"
+        ]
+      },
+      "post": {
+        "operationId": "FocusController_createPostIt",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "focus"
+        ]
+      }
+    },
+    "/payments/checkout": {
+      "post": {
+        "operationId": "PaymentsController_checkout",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/payments/webhooks/stripe": {
+      "post": {
+        "operationId": "PaymentsController_stripeWebhook",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/admin/dashboard": {
+      "get": {
+        "operationId": "AdminController_dashboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/users": {
+      "get": {
+        "operationId": "AdminController_users",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/courses": {
+      "post": {
+        "operationId": "AdminController_createCourse",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/courses/{id}/publish": {
+      "patch": {
+        "operationId": "AdminController_publishCourse",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/questions/import": {
+      "post": {
+        "operationId": "AdminController_importQuestions",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/feature-flags": {
+      "get": {
+        "operationId": "AdminController_flags",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/feature-flags/{key}": {
+      "patch": {
+        "operationId": "AdminController_setFlag",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/audit": {
+      "get": {
+        "operationId": "AdminController_audit",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/impersonate/{subjectId}": {
+      "post": {
+        "operationId": "AdminController_impersonate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/professor/dashboard": {
+      "get": {
+        "operationId": "ProfessorController_dashboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/professor/lessons": {
+      "post": {
+        "operationId": "ProfessorController_createLesson",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/professor/lessons/{id}/publish": {
+      "patch": {
+        "operationId": "ProfessorController_publishLesson",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/professor/essays/{id}/grade": {
+      "patch": {
+        "operationId": "ProfessorController_gradeEssay",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "professor"
+        ]
+      }
+    },
+    "/future/psychology/professionals": {
+      "get": {
+        "operationId": "FutureController_psychologyProfessionals",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "future"
+        ]
+      },
+      "post": {
+        "operationId": "FutureController_createPsychologyProfessional",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "future"
+        ]
+      }
+    },
+    "/future/mental-support": {
+      "get": {
+        "operationId": "FutureController_mentalSupport",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "future"
+        ]
+      },
+      "post": {
+        "operationId": "FutureController_createMentalSupport",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "future"
+        ]
+      }
+    },
+    "/future/recreio/rooms": {
+      "get": {
+        "operationId": "FutureController_recreioRooms",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "future"
+        ]
+      }
+    },
+    "/future/live-classes": {
+      "post": {
+        "operationId": "FutureController_createLiveClass",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "future"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Foxtrot Concursos API",
+    "description": "Contrato REST da plataforma Foxtrot Concursos.",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {}
+  }
+}
