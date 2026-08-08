@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["master", "main"]
+    branches: ["master", "main", "codex/desenvolvimento-neon"]
   pull_request:
 
 jobs:
@@ -20,10 +20,12 @@ jobs:
       - run: pnpm --filter @foxtrot/api test
       - run: pnpm --filter @foxtrot/api lint
       - run: pnpm --filter @foxtrot/worker lint
+      - run: pnpm --filter @foxtrot/ui test
       - run: pnpm --filter @foxtrot/aluno build
       - run: pnpm --filter @foxtrot/admin build
       - run: pnpm --filter @foxtrot/professor build
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm e2e
-        env:
-          E2E_BASE_URL: http://localhost:3000
+
+  # Os testes E2E (Playwright) exigem Postgres, Redis, seed e os apps rodando.
+  # Rode-os localmente com `docker compose up` + `pnpm dev` + `pnpm db:seed` + `pnpm e2e`,
+  # ou contra staging definindo E2E_ALUNO_URL/E2E_ADMIN_URL/E2E_PROFESSOR_URL.
+  # Quando houver ambiente de staging, adicione aqui um job dedicado com services.
