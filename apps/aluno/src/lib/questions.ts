@@ -165,6 +165,43 @@ export async function setQuestionFavorite(id: string, favorite: boolean) {
   return apiRequest<{ ok?: boolean } | { id: string }>(`/questions/${id}/favorite`, { method: favorite ? "POST" : "DELETE" });
 }
 
+export type QuestionNote = {
+  id: string;
+  title: string;
+  body: string;
+  questionId?: string | null;
+  subjectId?: string | null;
+  topicId?: string | null;
+  updatedAt: string;
+  question?: { code: string; statement: string } | null;
+  subject?: { name: string } | null;
+  topic?: { name: string } | null;
+};
+
+export async function postQuestionAnswer(id: string, body: string) {
+  return apiRequest<{ id: string }>(`/questions/${id}/answers`, { method: "POST", body: JSON.stringify({ body }) });
+}
+
+export async function requestAiAnswer(id: string) {
+  return apiRequest<{ body: string }>(`/questions/${id}/ai-answer`, { method: "POST" });
+}
+
+export async function upvoteAnswer(answerId: string) {
+  return apiRequest<{ voted: boolean; upvotes: number }>(`/questions/answers/${answerId}/upvote`, { method: "POST" });
+}
+
+export async function fetchNotes(filters: { subjectId?: string; topicId?: string; q?: string } = {}) {
+  const params = new URLSearchParams();
+  if (filters.subjectId) params.set("subjectId", filters.subjectId);
+  if (filters.topicId) params.set("topicId", filters.topicId);
+  if (filters.q) params.set("q", filters.q);
+  return apiRequest<QuestionNote[]>(`/questions/notes${params.size ? `?${params}` : ""}`);
+}
+
+export async function createQuestionNote(body: { questionId?: string; subjectId?: string; topicId?: string; title: string; body: string }) {
+  return apiRequest<QuestionNote>("/questions/notes", { method: "POST", body: JSON.stringify(body) });
+}
+
 export async function fetchPerformance() {
   return apiRequest<PerformanceSubject[]>("/questions/performance");
 }

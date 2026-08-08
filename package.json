@@ -5,7 +5,7 @@
   "description": "Monorepo da plataforma Foxtrot Concursos.",
   "packageManager": "pnpm@11.16.0",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "dev": "turbo dev --parallel",

@@ -153,6 +153,8 @@ model User {
   twoFactorSecret    String?
   twoFactorEnabled   Boolean             @default(false)
   onboardingComplete Boolean             @default(false)
+  streakFreezes      Int                 @default(1)
+  emailNotifications Boolean             @default(true)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   roles              UserRole[]
@@ -171,6 +173,8 @@ model User {
   questionFavorites  QuestionFavorite[]
   simulations        Simulation[]
   answers            QuestionAnswer[]
+  answerVotes        QuestionAnswerVote[]
+  streakFreezeUses   StreakFreezeUse[]
   notes              Note[]
   lists              StudyList[]
   studyGoals         StudyGoal[]
@@ -433,6 +437,7 @@ model Lesson {
   progress        LessonProgress[]
   ratings         LessonRating[]
   doubts          LessonDoubt[]
+  chunks          LessonChunk[]
 
   @@unique([moduleId, slug])
 }
@@ -607,8 +612,44 @@ model QuestionAnswer {
   createdAt   DateTime @default(now())
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  votes       QuestionAnswerVote[]
 
   @@index([questionId, isOfficial])
+}
+
+model QuestionAnswerVote {
+  answerId  String
+  userId    String
+  createdAt DateTime       @default(now())
+  answer    QuestionAnswer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([answerId, userId])
+}
+
+/// Chunk de transcricao com embedding para RAG por aula (pgvector).
+model LessonChunk {
+  id        String                       @id @default(cuid())
+  lessonId  String
+  position  Int
+  content   String
+  embedding Unsupported("vector(1024)")?
+  createdAt DateTime                     @default(now())
+  lesson    Lesson                       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, position])
+  @@index([lessonId])
+}
+
+/// Uso de congelamento de ofensiva (streak freeze) — um por dia coberto.
+model StreakFreezeUse {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime @db.Date
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
 }
 
 model QuestionAiAnswer {

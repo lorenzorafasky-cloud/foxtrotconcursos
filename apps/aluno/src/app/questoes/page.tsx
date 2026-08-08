@@ -39,7 +39,11 @@ import {
   fetchFavorites,
   fetchHistory,
   fetchPerformance,
+  createQuestionNote,
   fetchQuestionDetail,
+  postQuestionAnswer,
+  requestAiAnswer,
+  upvoteAnswer,
   fetchQuestionFilters,
   fetchQuestions,
   fetchReviewErrors,
@@ -640,25 +644,7 @@ function QuestionWorkspace({
         </div>
       </article>
 
-      {(shouldShowQuestionSolution(question) || question.answers.length > 0 || question.submissions?.length) && (
-        <section className="grid gap-4 md:grid-cols-2">
-          <article className="rounded-md border border-zinc-800 bg-zinc-950 p-4">
-            <h3 className="font-display text-lg font-bold uppercase text-white">Explicacao</h3>
-            <p className="mt-3 text-sm leading-6 text-zinc-300">{question.explanation ?? question.aiAnswer?.body ?? "Explicacao ainda nao disponivel."}</p>
-          </article>
-          <article className="rounded-md border border-zinc-800 bg-zinc-950 p-4">
-            <h3 className="font-display text-lg font-bold uppercase text-white">Discussao</h3>
-            <div className="mt-3 grid gap-3">
-              {question.answers.length === 0 && <p className="text-sm text-zinc-500">Sem respostas publicadas.</p>}
-              {question.answers.map((item) => (
-                <p key={item.id} className="rounded-md bg-zinc-900 p-3 text-sm text-zinc-300">
-                  <strong className="text-white">{item.isOfficial ? "Professor" : item.user.nickname}:</strong> {item.body}
-                </p>
-              ))}
-            </div>
-          </article>
-        </section>
-      )}
+      <QuestionLayers key={question.id} question={question} />
     </section>
   );
 }
@@ -916,4 +902,173 @@ function CompactEmptyState({ icon, text }: { icon: ReactNode; text: string }) {
 
 function isFavorite(question: QuestionSummary) {
   return Boolean(question.favorites?.length);
+}
+
+/**
+ * Secao 8 do Prompt Mestre: as tres camadas de resposta sempre visiveis lado a
+ * lado — alunos (thread com upvote), professor (oficial) e IA (sob demanda,
+ * cacheada) — mais a anotacao rapida da questao (centralizada em /questoes/anotacoes).
+ */
+function QuestionLayers({ question }: { question: QuestionDetail }) {
+  const [answers, setAnswers] = useState(question.answers);
+  const [aiBody, setAiBody] = useState(question.aiAnswer?.body ?? null);
+  const [newAnswer, setNewAnswer] = useState("");
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteBody, setNoteBody] = useState("");
+  const [busy, setBusy] = useState<"answer" | "ai" | "note" | "vote" | null>(null);
+  const [feedback, setFeedback] = useState("");
+
+  const studentAnswers = answers.filter((item) => !item.isOfficial);
+  const teacherAnswers = answers.filter((item) => item.isOfficial);
+
+  async function publishAnswer() {
+    if (!newAnswer.trim()) return;
+    setBusy("answer");
+    setFeedback("");
+    try {
+      // Usa o id retornado pela API: um id sintetico impediria o upvote da propria resposta.
+      const created = await postQuestionAnswer(question.id, newAnswer.trim());
+      setAnswers([...answers, { id: created.id, body: newAnswer.trim(), isOfficial: false, upvotes: 0, user: { nickname: "voce" } }]);
+      setNewAnswer("");
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Falha ao publicar resposta.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function vote(answerId: string) {
+    setBusy("vote");
+    try {
+      const result = await upvoteAnswer(answerId);
+      setAnswers(answers.map((item) => (item.id === answerId ? { ...item, upvotes: result.upvotes } : item)));
+    } catch {
+      // voto e best-effort na UI
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function generateAi() {
+    setBusy("ai");
+    setFeedback("");
+    try {
+      const result = await requestAiAnswer(question.id);
+      setAiBody(result.body);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Falha ao gerar resposta da IA.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveNote() {
+    if (!noteTitle.trim() || !noteBody.trim()) return;
+    setBusy("note");
+    setFeedback("");
+    try {
+      await createQuestionNote({ questionId: question.id, subjectId: question.subject.id, title: noteTitle.trim(), body: noteBody.trim() });
+      setNoteTitle("");
+      setNoteBody("");
+      setFeedback("Anotacao salva. Veja tudo em Anotacoes.");
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Falha ao salvar anotacao.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <>
+      <section className="grid gap-4 lg:grid-cols-3">
+        <article className="rounded-md border border-zinc-800 bg-zinc-950 p-4">
+          <h3 className="font-display text-lg font-bold uppercase text-white">Resposta de alunos</h3>
+          <div className="mt-3 grid gap-3">
+            {studentAnswers.length === 0 && <p className="text-sm text-zinc-500">Nenhuma resposta de aluno ainda.</p>}
+            {studentAnswers.map((item) => (
+              <div key={item.id} className="rounded-md bg-zinc-900 p-3 text-sm text-zinc-300">
+                <p><strong className="text-white">{item.user.nickname}:</strong> {item.body}</p>
+                <button
+                  className="mt-2 inline-flex items-center gap-1 text-xs uppercase text-foxtrot-300 hover:text-foxtrot-200"
+                  disabled={busy === "vote"}
+                  type="button"
+                  onClick={() => void vote(item.id)}
+                >
+                  ▲ util ({item.upvotes})
+                </button>
+              </div>
+            ))}
+            <textarea
+              className="min-h-20 w-full rounded-md border border-zinc-800 bg-zinc-900 p-2 text-sm text-zinc-100"
+              placeholder="Contribua com sua resposta"
+              value={newAnswer}
+              onChange={(event) => setNewAnswer(event.target.value)}
+            />
+            <Button disabled={busy === "answer" || !newAnswer.trim()} type="button" onClick={() => void publishAnswer()}>
+              Publicar resposta
+            </Button>
+          </div>
+        </article>
+
+        <article className="rounded-md border border-zinc-800 bg-zinc-950 p-4">
+          <h3 className="font-display text-lg font-bold uppercase text-white">Resposta do professor</h3>
+          <div className="mt-3 grid gap-3">
+            {teacherAnswers.length === 0 && (
+              <p className="text-sm text-zinc-500">Aguardando resposta oficial do professor da materia.</p>
+            )}
+            {teacherAnswers.map((item) => (
+              <p key={item.id} className="rounded-md border border-foxtrot-700/40 bg-zinc-900 p-3 text-sm text-zinc-200">
+                <span className="mb-1 block text-xs font-semibold uppercase text-foxtrot-300">Oficial</span>
+                {item.body}
+              </p>
+            ))}
+            {question.explanation && (
+              <p className="rounded-md bg-zinc-900 p-3 text-sm text-zinc-300">
+                <span className="mb-1 block text-xs font-semibold uppercase text-zinc-500">Gabarito comentado</span>
+                {question.explanation}
+              </p>
+            )}
+          </div>
+        </article>
+
+        <article className="rounded-md border border-zinc-800 bg-zinc-950 p-4">
+          <h3 className="font-display text-lg font-bold uppercase text-white">Resposta da IA</h3>
+          <div className="mt-3 grid gap-3">
+            {aiBody ? (
+              <p className="rounded-md bg-zinc-900 p-3 text-sm leading-6 text-zinc-300">{aiBody}</p>
+            ) : (
+              <>
+                <p className="text-sm text-zinc-500">Gerada sob demanda e cacheada para os proximos alunos.</p>
+                <Button disabled={busy === "ai"} type="button" variant="outline" onClick={() => void generateAi()}>
+                  {busy === "ai" ? "Gerando..." : "Gerar resposta da IA"}
+                </Button>
+              </>
+            )}
+          </div>
+        </article>
+      </section>
+
+      <section className="rounded-md border border-zinc-800 bg-zinc-950 p-4">
+        <h3 className="font-display text-lg font-bold uppercase text-white">Anotacao rapida</h3>
+        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_2fr_auto]">
+          <input
+            className="rounded-md border border-zinc-800 bg-zinc-900 p-2 text-sm text-zinc-100"
+            placeholder="Titulo"
+            value={noteTitle}
+            onChange={(event) => setNoteTitle(event.target.value)}
+          />
+          <input
+            className="rounded-md border border-zinc-800 bg-zinc-900 p-2 text-sm text-zinc-100"
+            placeholder="Sua anotacao sobre esta questao"
+            value={noteBody}
+            onChange={(event) => setNoteBody(event.target.value)}
+          />
+          <Button disabled={busy === "note" || !noteTitle.trim() || !noteBody.trim()} type="button" onClick={() => void saveNote()}>
+            Salvar
+          </Button>
+        </div>
+        {feedback && <p className="mt-2 text-sm text-foxtrot-300">{feedback}</p>}
+      </section>
+    </>
+  );
 }

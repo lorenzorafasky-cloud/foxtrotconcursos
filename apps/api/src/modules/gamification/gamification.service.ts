@@ -41,11 +41,13 @@ export class GamificationService {
     const level = levelForXp(totalXp);
     const rankingPosition = leaderboard.entries.find((entry) => entry.userId === userId)?.position ?? null;
     const contestRankingPosition = contestLeaderboard?.entries.find((entry) => entry.userId === userId)?.position ?? null;
+    const profile = await this.prisma.user.findUnique({ where: { id: userId }, select: { streakFreezes: true } });
     return {
       totalXp,
       level,
       rankingPosition,
       contestRankingPosition,
+      streakFreezes: profile?.streakFreezes ?? 0,
       targetExam,
       recentXp,
       achievements,
@@ -307,19 +309,22 @@ export class GamificationService {
   }
 
   private async metrics(userId: string) {
-    const [totalXp, focusSessions, correctQuestions, focus, questions] = await Promise.all([
+    const [totalXp, focusSessions, correctQuestions, focus, questions, freezeUses] = await Promise.all([
       this.totalXp(userId),
       this.prisma.focusSession.count({ where: { userId } }),
       this.prisma.questionAttempt.count({ where: { userId, isCorrect: true } }),
       this.prisma.focusSession.findMany({ where: { userId, startedAt: { gte: daysAgo(29) } }, select: { startedAt: true, netSeconds: true } }),
-      this.prisma.questionAttempt.findMany({ where: { userId, createdAt: { gte: daysAgo(29) } }, select: { createdAt: true } })
+      this.prisma.questionAttempt.findMany({ where: { userId, createdAt: { gte: daysAgo(29) } }, select: { createdAt: true } }),
+      this.prisma.streakFreezeUse.findMany({ where: { userId, date: { gte: daysAgo(29) } }, select: { date: true } })
     ]);
+    const frozenDays = new Set(freezeUses.map((use) => dateKey(use.date)));
     const activeDays = Array.from({ length: 30 }, (_, index) => {
       const date = daysAgo(29 - index);
       const key = dateKey(date);
       return {
         date: key,
         active:
+          frozenDays.has(key) ||
           focus.some((session) => dateKey(session.startedAt) === key && session.netSeconds > 0) ||
           questions.some((attempt) => dateKey(attempt.createdAt) === key)
       };

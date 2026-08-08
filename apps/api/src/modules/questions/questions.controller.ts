@@ -148,4 +148,9 @@ export class QuestionsController {
   aiAnswer(@Param("id") id: string) {
     return this.questions.aiAnswer(id);
   }
+
+  @Post("answers/:answerId/upvote")
+  upvoteAnswer(@CurrentUser() user: AuthUser, @Param("answerId") answerId: string) {
+    return this.questions.upvoteAnswer(user.id, answerId);
+  }
 }
