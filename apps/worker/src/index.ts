@@ -401,18 +401,25 @@ async function runStreakGuard() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  // Pre-filtra em 3 consultas agregadas em vez de varrer todos os usuarios:
+  // so interessam quem tem congelamento, estudou anteontem e nao estudou ontem.
+  const [activeDayBeforeIds, activeYesterdayIds, coveredIds] = await Promise.all([
+    activeUserIds(dayBefore, yesterday),
+    activeUserIds(yesterday, today),
+    prisma.streakFreezeUse
+      .findMany({ where: { date: yesterday }, select: { userId: true } })
+      .then((rows) => new Set(rows.map((row) => row.userId)))
+  ]);
+
+  const eligibleIds = [...activeDayBeforeIds].filter((id) => !activeYesterdayIds.has(id) && !coveredIds.has(id));
+  if (!eligibleIds.length) return;
+
   const candidates = await prisma.user.findMany({
-    where: { streakFreezes: { gt: 0 } },
+    where: { id: { in: eligibleIds }, streakFreezes: { gt: 0 } },
     select: { id: true, streakFreezes: true }
   });
 
   for (const user of candidates) {
-    const [activeYesterday, activeDayBefore, alreadyCovered] = await Promise.all([
-      hadActivity(user.id, yesterday, today),
-      hadActivity(user.id, dayBefore, yesterday),
-      prisma.streakFreezeUse.findUnique({ where: { userId_date: { userId: user.id, date: yesterday } } })
-    ]);
-    if (activeYesterday || !activeDayBefore || alreadyCovered) continue;
 
     await prisma.$transaction([
       prisma.streakFreezeUse.create({ data: { userId: user.id, date: yesterday } }),
@@ -430,20 +437,33 @@ async function runStreakGuard() {
   }
 }
 
-async function hadActivity(userId: string, from: Date, to: Date) {
+/** Ids de usuarios com qualquer atividade (foco liquido ou questao) no intervalo. */
+async function activeUserIds(from: Date, to: Date) {
   const [focus, attempts] = await Promise.all([
-    prisma.focusSession.count({ where: { userId, startedAt: { gte: from, lt: to }, netSeconds: { gt: 0 } } }),
-    prisma.questionAttempt.count({ where: { userId, createdAt: { gte: from, lt: to } } })
+    prisma.focusSession.findMany({
+      where: { startedAt: { gte: from, lt: to }, netSeconds: { gt: 0 } },
+      select: { userId: true },
+      distinct: ["userId"]
+    }),
+    prisma.questionAttempt.findMany({
+      where: { createdAt: { gte: from, lt: to } },
+      select: { userId: true },
+      distinct: ["userId"]
+    })
   ]);
-  return focus > 0 || attempts > 0;
+  return new Set([...focus.map((item) => item.userId), ...attempts.map((item) => item.userId)]);
 }
 
 /** E-mail transacional de notificacao via Resend (silencioso sem API key). */
 async function sendNotificationEmail(userId: string, title: string, body: string, actionUrl?: string) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return;
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, nickname: true } });
-  if (!user) return;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, nickname: true, emailNotifications: true }
+  });
+  // Respeita o opt-out do titular (LGPD): notificacao no app continua, e-mail nao.
+  if (!user || !user.emailNotifications) return;
   const appUrl = process.env.APP_URL ?? "http://localhost:3100";
   try {
     await fetch("https://api.resend.com/emails", {

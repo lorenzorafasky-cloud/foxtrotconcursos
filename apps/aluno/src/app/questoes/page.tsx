@@ -926,8 +926,9 @@ function QuestionLayers({ question }: { question: QuestionDetail }) {
     setBusy("answer");
     setFeedback("");
     try {
-      await postQuestionAnswer(question.id, newAnswer.trim());
-      setAnswers([...answers, { id: `local-${Date.now()}`, body: newAnswer.trim(), isOfficial: false, upvotes: 0, user: { nickname: "voce" } }]);
+      // Usa o id retornado pela API: um id sintetico impediria o upvote da propria resposta.
+      const created = await postQuestionAnswer(question.id, newAnswer.trim());
+      setAnswers([...answers, { id: created.id, body: newAnswer.trim(), isOfficial: false, upvotes: 0, user: { nickname: "voce" } }]);
       setNewAnswer("");
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Falha ao publicar resposta.");

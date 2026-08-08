@@ -2,6 +2,8 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
 ALTER TABLE "User" ADD COLUMN "streakFreezes" INTEGER NOT NULL DEFAULT 1;
+-- Opt-out de e-mails transacionais de notificacao (LGPD / Secao 15).
+ALTER TABLE "User" ADD COLUMN "emailNotifications" BOOLEAN NOT NULL DEFAULT true;
 
 CREATE TABLE "QuestionAnswerVote" (
     "answerId" TEXT NOT NULL,
